@@ -71,3 +71,63 @@
 ## Branding ML Serviços
 - [x] Integrar domínio mlservicoseco.com.br na identidade visual do sistema
 - [x] Configurar dados da empresa (nome, domínio, emails) como padrão no sistema
+
+## Exportação de Relatórios (Contas a Pagar / Receber)
+- [x] Instalar exceljs e pdfkit no backend
+- [x] Criar endpoint Express de exportação Excel para Contas a Pagar
+- [x] Criar endpoint Express de exportação PDF para Contas a Pagar
+- [x] Criar endpoint Express de exportação Excel para Contas a Receber
+- [x] Criar endpoint Express de exportação PDF para Contas a Receber
+- [x] Botões "Exportar Excel" e "Exportar PDF" na página Contas a Pagar
+- [x] Botões "Exportar Excel" e "Exportar PDF" na página Contas a Receber
+- [x] Testes unitários para exportação (55 testes passando)
+
+## Módulo de Planejamentos (Escalas de Trabalho)
+- [x] Criar tabela work_schedules (data, turno, cliente, local, status, valor total, pessoas)
+- [x] Criar tabela schedule_functions (função alocada no planejamento com valores paga/recebe)
+- [x] Criar tabela schedule_allocations (funcionário alocado com paga/recebe/marmita/vale/bônus)
+- [x] Atualizar schema Drizzle com as 3 novas tabelas
+- [x] Router tRPC para planejamentos (CRUD + filtros + alocação)
+- [x] Listagem com filtros (data, cliente, turno, local, funcionário) e abas (Todos/Pendentes/Validados)
+- [x] Modal Novo Planejamento (data, turno, cliente)
+- [x] Modal Editar Planejamento (data, turno, cliente, local, funções, alocação de funcionários)
+- [x] Modal Alocar Funcionários (busca por nome/CPF/cidade, seleção múltipla)
+- [x] Valores individuais por funcionário (paga, recebe, marmita, vale, bônus)
+- [x] Integrar na sidebar do DashboardLayout
+- [ ] Testes unitários para planejamentos
+
+## Melhorias Planejamentos v2
+- [ ] Trava anti-duplicidade: bloquear funcionário alocado 2x no mesmo dia (com opção de exceção justificada)
+- [ ] Alerta visual de conflito de alocação
+- [ ] Lançamento rápido de Vale/Bônus/Marmita (por CPF + Data + Valor, sem abrir planejamento)
+- [ ] Resumo expandível na listagem (seta que expande: pessoas, valor, marmitas, vales, bônus, lista funcionários)
+- [ ] Campo observação por planejamento e por alocação
+- [ ] Controle de presença por alocação (Presente/Faltou/Parcial)
+- [ ] Coluna attendance_status e notes na tabela schedule_allocations
+- [x] Testes unitários para novas funcionalidades
+- [x] Testes de Stress (50+ planejamentos, 50+ alocações)
+- [x] Testes de Segurança (RBAC, SQL injection, autenticação)
+- [x] Testes de Governança (fluxo PIX, cascata, integridade)
+- [x] Testes de Rastreabilidade (auditoria, check-in/out, presença)
+
+## Portal do Líder
+- [ ] Adicionar role 'leader' ao enum de users
+- [ ] Campo leaderId no work_schedules
+- [ ] Campos checkInTime/checkOutTime no schedule_allocations
+- [ ] Campos docFrontUrl/docBackUrl no employees
+- [ ] Tabela pix_change_requests (solicitação de alteração PIX)
+- [ ] Router portalLider (meus planejamentos, check-in/out, cadastro rápido, solicitação PIX)
+- [ ] Tela Portal do Líder mobile-first
+- [ ] Cadastro rápido de funcionário (nome, CPF, RG, PIX, foto documento)
+- [ ] Upload de foto de documento (frente/verso) via câmera
+- [ ] Check-in/check-out de presença com timestamp
+- [ ] Solicitação de alteração PIX com fluxo de aprovação
+- [ ] Tela admin para aprovar/rejeitar solicitações PIX
+- [ ] Integrar na sidebar e App.tsx
+
+## Ajustes
+- [x] Alterar "Data de Admissão" para "Data de Cadastro" no schema e telas de funcionários
+
+- [ ] Ajustar lógica: líder é papel separado, não precisa estar em schedule_allocations
+- [ ] Líder pode ser: do dia (alocado) ou fixo (só supervisiona, não trabalha)
+- [ ] Planejamentos podem não ter líder (leaderId nullable)

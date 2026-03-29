@@ -26,7 +26,7 @@ const fields: FieldDef[] = [
       val === "diarista" ? "badge-success" : val === "inativo" ? "badge-danger" : "badge-warning"
     }`}>{val || "—"}</span>
   )},
-  { key: "admissionDate", label: "Data Admissão", type: "date" },
+  { key: "registrationDate", label: "Data de Cadastro", type: "date" },
   { key: "notes", label: "Observações", type: "textarea", showInTable: false },
 ];
 

@@ -19,6 +19,7 @@ import AccountsReceivablePage from "./pages/AccountsReceivable";
 import PaymentBatchesPage from "./pages/PaymentBatches";
 import UsersPage from "./pages/Users";
 import AnalyticsPage from "./pages/Analytics";
+import SchedulesPage from "./pages/Schedules";
 
 function Router() {
   return (
@@ -62,6 +63,9 @@ function Router() {
       </Route>
       <Route path="/analytics">
         <DashboardLayout><AnalyticsPage /></DashboardLayout>
+      </Route>
+      <Route path="/schedules">
+        <DashboardLayout><SchedulesPage /></DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

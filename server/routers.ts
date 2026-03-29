@@ -5,6 +5,8 @@ import { publicProcedure, router } from "./_core/trpc";
 import { cadastrosRouter } from "./routers/cadastros";
 import { financeiroRouter } from "./routers/financeiro";
 import { usuariosRouter } from "./routers/usuarios";
+import { planejamentosRouter } from "./routers/planejamentos";
+import { portalLiderRouter } from "./routers/portalLider";
 
 export const appRouter = router({
   system: systemRouter,
@@ -23,8 +25,14 @@ export const appRouter = router({
   // Financeiro (Accounts Payable/Receivable, Payment Batches, Dashboard KPIs)
   financeiro: financeiroRouter,
 
+  // Planejamentos (Escalas de Trabalho)
+  planejamentos: planejamentosRouter,
+
   // Gestão de Usuários e Permissões
   usuarios: usuariosRouter,
+
+  // Portal do Líder
+  portalLider: portalLiderRouter,
 });
 
 export type AppRouter = typeof appRouter;

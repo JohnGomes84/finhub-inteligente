@@ -58,7 +58,7 @@ export const cadastrosRouter = router({
         pixKey: z.string().optional(),
         pixKeyType: z.enum(["cpf", "email", "phone", "random", "cnpj"]).optional(),
         status: z.enum(["diarista", "inativo", "pendente"]).default("diarista"),
-        admissionDate: z.string().optional(),
+        registrationDate: z.string().optional(),
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -68,7 +68,7 @@ export const cadastrosRouter = router({
         const result = await db.insert(employees).values({
           ...input,
           email: input.email || null,
-          admissionDate: input.admissionDate ? new Date(input.admissionDate) : null,
+          registrationDate: input.registrationDate ? new Date(input.registrationDate) : null,
         });
         return { id: Number(result[0].insertId) };
       }),
@@ -84,7 +84,7 @@ export const cadastrosRouter = router({
         pixKey: z.string().optional(),
         pixKeyType: z.enum(["cpf", "email", "phone", "random", "cnpj"]).optional(),
         status: z.enum(["diarista", "inativo", "pendente"]).optional(),
-        admissionDate: z.string().optional(),
+        registrationDate: z.string().optional(),
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -95,7 +95,7 @@ export const cadastrosRouter = router({
         await db.update(employees).set({
           ...data,
           email: data.email || null,
-          admissionDate: data.admissionDate ? new Date(data.admissionDate) : undefined,
+          registrationDate: data.registrationDate ? new Date(data.registrationDate) : undefined,
         }).where(eq(employees.id, id));
         return { success: true };
       }),

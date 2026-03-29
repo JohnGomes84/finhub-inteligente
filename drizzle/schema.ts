@@ -21,7 +21,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "leader"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -44,8 +44,11 @@ export const employees = mysqlTable("employees", {
   city: varchar("city", { length: 100 }),
   pixKey: varchar("pixKey", { length: 255 }), // Chave PIX (CPF, email, telefone, aleatória)
   pixKeyType: mysqlEnum("pixKeyType", ["cpf", "email", "phone", "random", "cnpj"]),
+  rg: varchar("rg", { length: 30 }),
+  docFrontUrl: text("docFrontUrl"), // Foto documento frente (S3)
+  docBackUrl: text("docBackUrl"), // Foto documento verso (S3)
   status: mysqlEnum("status", ["diarista", "inativo", "pendente"]).default("diarista").notNull(),
-  admissionDate: datetime("admissionDate"),
+  registrationDate: datetime("registrationDate"), // Data de cadastro do diarista
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -337,6 +340,67 @@ export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = typeof userPermissions.$inferInsert;
 
 /** Módulos disponíveis no sistema */
+// ============================================================
+// PLANEJAMENTOS - Escalas de Trabalho
+// ============================================================
+
+/** Planejamentos (escalas de trabalho diárias) */
+export const workSchedules = mysqlTable("work_schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  date: datetime("date").notNull(),
+  shiftId: int("shiftId"),
+  clientId: int("clientId").notNull(),
+  clientUnitId: int("clientUnitId"),
+  status: mysqlEnum("status", ["pendente", "validado", "cancelado"]).default("pendente").notNull(),
+  totalPayValue: decimal("totalPayValue", { precision: 15, scale: 2 }).default("0"),
+  totalReceiveValue: decimal("totalReceiveValue", { precision: 15, scale: 2 }).default("0"),
+  totalPeople: int("totalPeople").default(0),
+  leaderId: int("leaderId"), // Funcionário responsável (líder) da operação
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WorkSchedule = typeof workSchedules.$inferSelect;
+export type InsertWorkSchedule = typeof workSchedules.$inferInsert;
+
+/** Funções alocadas dentro de um planejamento */
+export const scheduleFunctions = mysqlTable("schedule_functions", {
+  id: int("id").autoincrement().primaryKey(),
+  scheduleId: int("scheduleId").notNull(),
+  jobFunctionId: int("jobFunctionId").notNull(),
+  payValue: decimal("payValue", { precision: 10, scale: 2 }).default("0"), // Valor padrão paga
+  receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }).default("0"), // Valor padrão recebe
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleFunction = typeof scheduleFunctions.$inferSelect;
+export type InsertScheduleFunction = typeof scheduleFunctions.$inferInsert;
+
+/** Funcionários alocados dentro de uma função de um planejamento */
+export const scheduleAllocations = mysqlTable("schedule_allocations", {
+  id: int("id").autoincrement().primaryKey(),
+  scheduleFunctionId: int("scheduleFunctionId").notNull(),
+  scheduleId: int("scheduleId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  payValue: decimal("payValue", { precision: 10, scale: 2 }).default("0"),
+  receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }).default("0"),
+  mealAllowance: decimal("mealAllowance", { precision: 10, scale: 2 }).default("0"), // Marmita
+  voucher: decimal("voucher", { precision: 10, scale: 2 }).default("0"), // Vale
+  bonus: decimal("bonus", { precision: 10, scale: 2 }).default("0"),
+  paymentBatchId: int("paymentBatchId"), // Referência ao lote de pagamento (null = não pago)
+  attendanceStatus: mysqlEnum("attendance_status", ["presente", "faltou", "parcial"]).default("presente"),
+  allocNotes: text("alloc_notes"), // Observação individual (motivo falta, etc.)
+  checkInTime: datetime("checkInTime"), // Horário de chegada registrado pelo líder
+  checkOutTime: datetime("checkOutTime"), // Horário de saída registrado pelo líder
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleAllocation = typeof scheduleAllocations.$inferSelect;
+export type InsertScheduleAllocation = typeof scheduleAllocations.$inferInsert;
+
 export const SYSTEM_MODULES = [
   "dashboard",
   "employees",
@@ -349,9 +413,31 @@ export const SYSTEM_MODULES = [
   "accounts_payable",
   "accounts_receivable",
   "payment_batches",
+  "schedules",
   "documents",
   "analytics",
   "users",
 ] as const;
 
 export type SystemModule = typeof SYSTEM_MODULES[number];
+
+// ============================================================
+// SOLICITAÇÕES DE ALTERAÇÃO DE PIX
+// ============================================================
+
+/** Solicitações de alteração de chave PIX (líder solicita, admin aprova) */
+export const pixChangeRequests = mysqlTable("pix_change_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  requestedByUserId: int("requestedByUserId").notNull(),
+  oldPixKey: text("oldPixKey"),
+  newPixKey: text("newPixKey").notNull(),
+  status: mysqlEnum("status", ["pendente", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  reviewedByUserId: int("reviewedByUserId"),
+  reviewNotes: text("reviewNotes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PixChangeRequest = typeof pixChangeRequests.$inferSelect;
+export type InsertPixChangeRequest = typeof pixChangeRequests.$inferInsert;

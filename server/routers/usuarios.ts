@@ -85,7 +85,7 @@ export const usuariosRouter = router({
 
   // Promover/rebaixar role (admin only)
   setRole: adminProcedure
-    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin", "leader"]) }))
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível alterar seu próprio papel" });
@@ -121,6 +121,7 @@ function getModuleLabel(mod: string): string {
     accounts_payable: "Contas a Pagar",
     accounts_receivable: "Contas a Receber",
     payment_batches: "Lotes de Pagamento",
+    schedules: "Planejamentos",
     documents: "Documentos",
     analytics: "Analytics",
     users: "Usuários",

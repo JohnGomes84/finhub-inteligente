@@ -56,6 +56,7 @@ type CrudPageProps = {
   onUpdate?: (data: any) => Promise<void>;
   onDelete?: (id: number) => Promise<void>;
   searchPlaceholder?: string;
+  headerExtra?: React.ReactNode;
 };
 
 export default function CrudPage({
@@ -72,6 +73,7 @@ export default function CrudPage({
   onUpdate,
   onDelete,
   searchPlaceholder = "Buscar...",
+  headerExtra,
 }: CrudPageProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -151,11 +153,14 @@ export default function CrudPage({
           </h1>
           {subtitle && <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>}
         </div>
-        {canCreate && onCreate && (
-          <Button onClick={openCreate} size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" /> Novo
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {headerExtra}
+          {canCreate && onCreate && (
+            <Button onClick={openCreate} size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" /> Novo
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card className="border-border/50">

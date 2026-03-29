@@ -27,6 +27,7 @@ import {
   LayoutDashboard, Users, Building2, Truck, Clock, Briefcase,
   Landmark, CreditCard, Receipt, Wallet, BarChart3, Shield,
   LogOut, PanelLeft, ChevronDown, CircleDollarSign, Settings,
+  CalendarDays,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -51,6 +52,7 @@ const allMenuItems: MenuItem[] = [
   { icon: Clock, label: "Turnos", path: "/shifts", module: "shifts", group: "Cadastros" },
   { icon: Settings, label: "Centros de Custo", path: "/cost-centers", module: "cost_centers", group: "Cadastros" },
   { icon: Landmark, label: "Contas Bancárias", path: "/bank-accounts", module: "bank_accounts", group: "Cadastros" },
+  { icon: CalendarDays, label: "Planejamentos", path: "/schedules", module: "schedules", group: "Operações" },
   { icon: CreditCard, label: "Contas a Pagar", path: "/accounts-payable", module: "accounts_payable", group: "Financeiro" },
   { icon: Receipt, label: "Contas a Receber", path: "/accounts-receivable", module: "accounts_receivable", group: "Financeiro" },
   { icon: Wallet, label: "Lotes de Pagamento", path: "/payment-batches", module: "payment_batches", group: "Financeiro" },

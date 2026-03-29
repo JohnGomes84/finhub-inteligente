@@ -14,7 +14,8 @@ const MODULE_LABELS: Record<string, string> = {
   suppliers: "Fornecedores", shifts: "Turnos", functions: "Funções",
   cost_centers: "Centros de Custo", bank_accounts: "Contas Bancárias",
   accounts_payable: "Contas a Pagar", accounts_receivable: "Contas a Receber",
-  payment_batches: "Lotes de Pagamento", documents: "Documentos",
+  payment_batches: "Lotes de Pagamento", schedules: "Planejamentos",
+  documents: "Documentos",
   analytics: "Analytics", users: "Usuários",
 };
 
