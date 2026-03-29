@@ -76,16 +76,16 @@
 ## Fase 4: Upload e Processamento de Arquivos
 
 ### Upload de Arquivos
-- [ ] Implementar interface de upload (drag-and-drop)
-- [ ] Suportar formatos: OFX, XML, PDF, PNG, JPG
-- [ ] Validar tamanho e tipo de arquivo
-- [ ] Armazenar arquivos em S3 com referências no BD
+- [x] Implementar interface de upload (drag-and-drop)
+- [x] Suportar formatos: OFX, XML, PDF, PNG, JPG
+- [x] Validar tamanho e tipo de arquivo
+- [x] Armazenar arquivos em S3 com referências no BD
 
 ### Processamento de Arquivos
-- [ ] Parser para OFX (extratos bancários)
-- [ ] Parser para XML (notas fiscais)
-- [ ] Extrator de dados de PDF (OCR/LLM)
-- [ ] Extrator de dados de imagens (OCR/LLM)
+- [x] Parser para OFX (extratos bancários)
+- [x] Parser para XML (notas fiscais)
+- [x] Extrator de dados de PDF (OCR/LLM)
+- [x] Extrator de dados de imagens (OCR/LLM)
 
 ### Testes
 - [ ] Criar testes de upload de arquivos
@@ -97,15 +97,15 @@
 ## Fase 5: Inteligência de Dados - Extração Automática com IA
 
 ### Integração com LLM
-- [ ] Configurar chamadas ao LLM para OCR de PDFs
-- [ ] Configurar chamadas ao LLM para OCR de imagens
-- [ ] Extrair dados estruturados de documentos
-- [ ] Sugerir categorização automática
+- [x] Configurar chamadas ao LLM para OCR de PDFs
+- [x] Configurar chamadas ao LLM para OCR de imagens
+- [x] Extrair dados estruturados de documentos
+- [x] Sugerir categorização automática
 
 ### Processamento Inteligente
-- [ ] Identificar tipo de documento (nota fiscal, recibo, etc)
-- [ ] Extrair valor, data, fornecedor/cliente
-- [ ] Validar dados extraídos
+- [x] Identificar tipo de documento (nota fiscal, recibo, etc)
+- [x] Extrair valor, data, fornecedor/cliente
+- [x] Validar dados extraídos
 - [ ] Propor lançamentos automáticos
 
 ### Testes
@@ -118,9 +118,9 @@
 ## Fase 6: Conciliação Bancária - Cruzamento Automático
 
 ### Lógica de Conciliação
-- [ ] Implementar algoritmo de matching entre extratos e lançamentos
-- [ ] Suportar matching por valor, data e descrição
-- [ ] Identificar lançamentos não conciliados
+- [x] Implementar algoritmo de matching entre extratos e lançamentos
+- [x] Suportar matching por valor, data e descrição
+- [x] Identificar lançamentos não conciliados
 - [ ] Identificar transações duplicadas
 
 ### Interface de Conciliação
@@ -139,13 +139,13 @@
 ## Fase 7: Alertas, Notificações e Relatórios
 
 ### Sistema de Alertas
-- [ ] Alertas de vencimento de pagamentos
-- [ ] Alertas de recebimentos atrasados
-- [ ] Alertas de saldo baixo
-- [ ] Alertas de divergências na conciliação
+- [x] Alertas de vencimento de pagamentos
+- [x] Alertas de recebimentos atrasados
+- [x] Alertas de saldo baixo
+- [x] Alertas de divergências na conciliação
 
 ### Notificações
-- [ ] Implementar notificações no sistema
+- [x] Implementar notificações no sistema
 - [ ] Enviar notificações por email (opcional)
 - [ ] Exibir notificações no dashboard
 
