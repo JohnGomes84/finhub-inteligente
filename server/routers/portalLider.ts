@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
-import { eq, and } from "drizzle-orm";
+import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import { eq, and, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   workSchedules, scheduleAllocations, employees, pixChangeRequests, users,
@@ -15,14 +15,19 @@ async function isLeaderOfSchedule(userId: number, scheduleId: number): Promise<b
 
   // Buscar o planejamento
   const [schedule] = await db.select().from(workSchedules).where(eq(workSchedules.id, scheduleId)).limit(1);
-  if (!schedule || !schedule.leaderId) return false;
+  if (!schedule) return false;
+
+  // Admins podem ver tudo
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (user?.role === "admin") return true;
+
+  if (!schedule.leaderId) return false;
 
   // Buscar o funcionário do líder
   const [leaderEmp] = await db.select().from(employees).where(eq(employees.id, schedule.leaderId)).limit(1);
   if (!leaderEmp) return false;
 
-  // Verificar se o usuário logado é o funcionário líder (por email ou ID)
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  // Verificar se o usuário logado é o funcionário líder (por email)
   return user?.email === leaderEmp.email || false;
 }
 
@@ -35,12 +40,20 @@ export const portalLiderRouter = router({
       if (!db) return [];
 
       // Buscar funcionário do usuário logado
-      const emps = await db.select().from(employees);
-      const myEmp = emps.find(e => e.email === ctx.user.email);
-      if (!myEmp) return [];
+      const [myEmp] = await db.select().from(employees).where(eq(employees.email, ctx.user.email)).limit(1);
+      
+      // Se não for funcionário e não for admin, não vê nada
+      if (!myEmp && ctx.user.role !== "admin") return [];
 
-      // Buscar planejamentos onde sou líder
-      let schedules = await db.select().from(workSchedules).where(eq(workSchedules.leaderId, myEmp.id));
+      // Buscar planejamentos onde sou líder (ou todos se for admin)
+      let query = db.select().from(workSchedules);
+      
+      if (ctx.user.role !== "admin") {
+        // @ts-ignore - drizzle-orm type issue with where
+        query = query.where(eq(workSchedules.leaderId, myEmp.id));
+      }
+
+      let schedules = await query;
 
       // Filtros por data
       if (input?.dateStart) {
@@ -72,8 +85,13 @@ export const portalLiderRouter = router({
     // Buscar alocações
     const allocs = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.scheduleId, input));
 
-    // Buscar dados dos funcionários
-    const empMap = Object.fromEntries((await db.select().from(employees)).map(e => [e.id, e]));
+    // Buscar dados dos funcionários alocados
+    const empIds = Array.from(new Set(allocs.map(a => a.employeeId)));
+    const empMap: Record<number, any> = {};
+    if (empIds.length > 0) {
+      const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      emps.forEach(e => { empMap[e.id] = e; });
+    }
 
     return {
       ...schedule,
@@ -240,20 +258,27 @@ export const portalLiderRouter = router({
     }),
 
   // ============ LISTAR SOLICITAÇÕES PIX PENDENTES (admin only) ============
-  listPixRequests: protectedProcedure
+  listPixRequests: adminProcedure
     .input(z.object({ status: z.enum(["pendente", "aprovado", "rejeitado"]).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
 
-      let requests = await db.select().from(pixChangeRequests);
-
+      let query = db.select().from(pixChangeRequests);
       if (input?.status) {
-        requests = requests.filter(r => r.status === input.status);
+        // @ts-ignore
+        query = query.where(eq(pixChangeRequests.status, input.status));
       }
+      
+      const requests = await query;
 
       // Enriquecer com dados do funcionário
-      const empMap = Object.fromEntries((await db.select().from(employees)).map(e => [e.id, e]));
+      const empIds = Array.from(new Set(requests.map(r => r.employeeId)));
+      const empMap: Record<number, any> = {};
+      if (empIds.length > 0) {
+        const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+        emps.forEach(e => { empMap[e.id] = e; });
+      }
 
       return requests.map(r => ({
         ...r,
@@ -263,7 +288,7 @@ export const portalLiderRouter = router({
     }),
 
   // ============ APROVAR/REJEITAR ALTERAÇÃO PIX (admin only) ============
-  reviewPixRequest: protectedProcedure
+  reviewPixRequest: adminProcedure
     .input(z.object({
       requestId: z.number(),
       approved: z.boolean(),
