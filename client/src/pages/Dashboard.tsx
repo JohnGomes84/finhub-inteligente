@@ -1,271 +1,123 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, Plus, TrendingUp, TrendingDown, Wallet } from "lucide-react";
-import { Link } from "wouter";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DollarSign, TrendingUp, TrendingDown, Users, Building2,
+  CreditCard, Receipt, AlertTriangle,
+} from "lucide-react";
 
-/**
- * Dashboard - Página principal com visualização de fluxo de caixa
- */
-
-const COLORS = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"];
+function formatCurrency(value: string | number) {
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(num);
+}
 
 export default function Dashboard() {
-  const { user, loading: authLoading } = useAuth();
-  const { data: bankAccounts, isLoading: accountsLoading } = trpc.bankAccounts.list.useQuery(
-    { activeOnly: true },
-    { enabled: !!user }
-  );
-  const { data: summary, isLoading: summaryLoading } = trpc.transactions.getSummary.useQuery(
-    {
-      startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      endDate: new Date(),
-    },
-    { enabled: !!user }
-  );
-  const { data: pendingTransactions, isLoading: pendingLoading } = trpc.transactions.getPending.useQuery(
-    undefined,
-    { enabled: !!user }
-  );
-  const { data: overdueTransactions, isLoading: overdueLoading } = trpc.transactions.getOverdue.useQuery(
-    undefined,
-    { enabled: !!user }
-  );
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin w-8 h-8" />
-      </div>
-    );
-  }
-
-  const isLoading = accountsLoading || summaryLoading || pendingLoading || overdueLoading;
-  const totalBalance = bankAccounts?.reduce((sum, acc) => {
-    return sum + parseFloat(acc.currentBalance || "0");
-  }, 0) || 0;
-
-  const totalIncome = parseFloat(summary?.totalIncome || "0");
-  const totalExpense = parseFloat(summary?.totalExpense || "0");
-
-  // Dados para gráficos
-  const categoryData = [
-    { name: "Receitas", value: totalIncome, fill: "#10b981" },
-    { name: "Despesas", value: totalExpense, fill: "#ef4444" },
-  ];
-
-  const monthlyData = [
-    { month: "Jan", income: 0, expense: 0 },
-    { month: "Fev", income: 0, expense: 0 },
-    { month: "Mar", income: totalIncome, expense: totalExpense },
-  ];
+  const { data: kpis, isLoading: kpisLoading } = trpc.financeiro.dashboard.kpis.useQuery();
+  const { data: payableSummary } = trpc.financeiro.payable.summary.useQuery();
+  const { data: receivableSummary } = trpc.financeiro.receivable.summary.useQuery();
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard Financeiro</h1>
-          <p className="text-gray-500 mt-1">Bem-vindo, {user?.name || "Usuário"}!</p>
-        </div>
-        <Link href="/transactions/new">
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Novo Lançamento
-          </Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">Visão geral financeira — ML Serviços</p>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Saldo Total</CardTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard title="Receita Total" value={kpis ? formatCurrency(kpis.revenue) : "—"} icon={TrendingUp} loading={kpisLoading} color="text-emerald-400" bgColor="bg-emerald-400/10" />
+        <KpiCard title="Custos Totais" value={kpis ? formatCurrency(kpis.costs) : "—"} icon={TrendingDown} loading={kpisLoading} color="text-red-400" bgColor="bg-red-400/10" />
+        <KpiCard title="Margem" value={kpis ? formatCurrency(kpis.margin) : "—"} icon={DollarSign} loading={kpisLoading} color="text-blue-400" bgColor="bg-blue-400/10" />
+        <KpiCard title="Funcionários" value={kpis?.employeeCount?.toString() || "0"} icon={Users} loading={kpisLoading} color="text-purple-400" bgColor="bg-purple-400/10" />
+      </div>
+
+      {/* Financial Summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-red-400" />
+              Contas a Pagar
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">
-                R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </div>
-              <Wallet className="w-8 h-8 text-blue-500 opacity-20" />
+          <CardContent className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Pendente</span>
+              <span className="text-sm font-medium text-yellow-400">{payableSummary ? formatCurrency(payableSummary.totalPending) : "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Pago</span>
+              <span className="text-sm font-medium text-emerald-400">{payableSummary ? formatCurrency(payableSummary.totalPaid) : "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-400" /> Vencido</span>
+              <span className="text-sm font-medium text-red-400">{payableSummary ? formatCurrency(payableSummary.totalOverdue) : "—"}</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Receitas (Mês)</CardTitle>
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-emerald-400" />
+              Contas a Receber
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold text-green-600">
-                R$ {totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </div>
-              <TrendingUp className="w-8 h-8 text-green-500 opacity-20" />
+          <CardContent className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Pendente</span>
+              <span className="text-sm font-medium text-yellow-400">{receivableSummary ? formatCurrency(receivableSummary.totalPending) : "—"}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Despesas (Mês)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold text-red-600">
-                R$ {totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </div>
-              <TrendingDown className="w-8 h-8 text-red-500 opacity-20" />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Recebido</span>
+              <span className="text-sm font-medium text-emerald-400">{receivableSummary ? formatCurrency(receivableSummary.totalReceived) : "—"}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Pendências</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{pendingTransactions?.length || 0}</div>
-              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                <span className="text-yellow-600 font-bold">{overdueTransactions?.length || 0}</span>
-              </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-400" /> Vencido</span>
+              <span className="text-sm font-medium text-red-400">{receivableSummary ? formatCurrency(receivableSummary.totalOverdue) : "—"}</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">{overdueTransactions?.length || 0} atrasadas</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Fluxo de Caixa */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Fluxo de Caixa (Últimos 3 Meses)</CardTitle>
-            <CardDescription>Receitas vs Despesas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="animate-spin w-6 h-6" />
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="income" fill="#10b981" name="Receitas" />
-                  <Bar dataKey="expense" fill="#ef4444" name="Despesas" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Distribuição */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribuição (Mês Atual)</CardTitle>
-            <CardDescription>Receitas vs Despesas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="animate-spin w-6 h-6" />
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: R$ ${value.toFixed(2)}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <QuickStat label="Clientes" value={kpis?.clientCount?.toString() || "0"} icon={Building2} />
+        <QuickStat label="Total Operações" value={kpis?.totalJobs?.toString() || "0"} icon={Receipt} />
+        <QuickStat label="Contas a Pagar" value={payableSummary?.count?.toString() || "0"} icon={CreditCard} />
+        <QuickStat label="Contas a Receber" value={receivableSummary?.count?.toString() || "0"} icon={Receipt} />
       </div>
+    </div>
+  );
+}
 
-      {/* Contas Bancárias */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Contas Bancárias</CardTitle>
-          <CardDescription>Suas contas e saldos</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {accountsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="animate-spin w-6 h-6" />
-            </div>
-          ) : bankAccounts && bankAccounts.length > 0 ? (
-            <div className="space-y-3">
-              {bankAccounts.map((account) => (
-                <div key={account.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{account.name}</p>
-                    <p className="text-sm text-gray-500">{account.bankName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">
-                      R$ {parseFloat(account.currentBalance || "0").toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-gray-500">{account.accountType}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">Nenhuma conta bancária cadastrada</p>
-              <Link href="/bank-accounts/new">
-                <Button variant="outline">Adicionar Conta</Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+function KpiCard({ title, value, icon: Icon, loading, color, bgColor }: {
+  title: string; value: string; icon: any; loading: boolean; color: string; bgColor: string;
+}) {
+  return (
+    <Card className="border-border/50">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{title}</p>
+            {loading ? <div className="h-7 w-24 bg-muted animate-pulse rounded" /> : <p className="text-xl font-bold tracking-tight">{value}</p>}
+          </div>
+          <div className={`h-10 w-10 rounded-lg ${bgColor} flex items-center justify-center`}>
+            <Icon className={`h-5 w-5 ${color}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-      {/* Transações Pendentes */}
-      {pendingTransactions && pendingTransactions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Transações Pendentes</CardTitle>
-            <CardDescription>{pendingTransactions.length} pendência(s)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {pendingTransactions.slice(0, 5).map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-2 border-b last:border-0">
-                  <div>
-                    <p className="font-medium">{tx.description}</p>
-                    <p className="text-sm text-gray-500">{new Date(tx.transactionDate).toLocaleDateString("pt-BR")}</p>
-                  </div>
-                  <p className={`font-bold ${tx.type === "income" ? "text-green-600" : "text-red-600"}`}>
-                    {tx.type === "income" ? "+" : "-"} R$ {parseFloat(tx.amount || "0").toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+function QuickStat({ label, value, icon: Icon }: { label: string; value: string; icon: any }) {
+  return (
+    <div className="glass-card p-4 flex items-center gap-3">
+      <Icon className="h-4 w-4 text-muted-foreground" />
+      <div>
+        <p className="text-lg font-semibold">{value}</p>
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+      </div>
     </div>
   );
 }

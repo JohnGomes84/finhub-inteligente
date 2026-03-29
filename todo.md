@@ -1,197 +1,73 @@
-# FinHub Inteligente - TODO
+# FinHub Inteligente - TODO (ML Serviços - Módulo Financeiro)
 
-## Fase 1: Estrutura Base - Banco de Dados, Autenticação e Módulos de Controle
+## Fase 1: Reestruturar Banco de Dados
+- [x] Criar tabela employees (funcionários/diaristas) com CPF, cidade, status, chave PIX, data admissão
+- [x] Criar tabela clients (empresas clientes) com nome, cidade, endereço, CNPJ
+- [x] Criar tabela client_units (unidades/locais dentro do cliente)
+- [x] Criar tabela job_functions (funções: Aux. Carga e Descarga, Líder, etc.)
+- [x] Criar tabela shifts (turnos: MLT-1 a MLT-13 com horários)
+- [x] Criar tabela cost_centers (centros de custo)
+- [x] Criar tabela suppliers (fornecedores com CNPJ e chave PIX)
+- [x] Criar tabela accounts_payable (contas a pagar)
+- [x] Criar tabela accounts_receivable (contas a receber)
+- [x] Criar tabela payment_batches (lotes de pagamento de funcionários)
+- [x] Criar tabela payment_batch_items (itens do lote)
+- [x] Executar migrações SQL
+- [x] Criar tabela user_permissions para RBAC granular por módulo
+- [x] DB helpers para cadastros (employees, clients, suppliers, shifts, etc.)
+- [x] DB helpers para financeiro (accounts_payable, accounts_receivable, payment_batches)
+- [x] Routers tRPC para cadastros
+- [x] Routers tRPC para financeiro
+- [x] Router tRPC para gestão de usuários e permissões
 
-### Banco de Dados
-- [x] Criar tabelas de usuários com roles (admin/user)
-- [x] Criar tabelas de lançamentos financeiros (transactions)
-- [x] Criar tabelas de categorias de lançamentos
-- [x] Criar tabelas de contas bancárias
-- [x] Criar tabelas de documentos fiscais (notas, recibos)
-- [x] Criar tabelas de logs de auditoria
-- [x] Executar migrações SQL no banco de dados
+## Fase 2: Redesign Visual Arrojado
+- [x] Definir paleta de cores sofisticada (tema escuro)
+- [x] Configurar tipografia premium (Google Fonts - Inter)
+- [x] Atualizar index.css com variáveis de tema
+- [x] Redesign do DashboardLayout com sidebar moderna
+- [x] Configurar App.tsx com todas as rotas e tema escuro
 
-### Autenticação e Segurança
-- [x] Validar integração OAuth (já configurada)
-- [x] Implementar controle de acesso baseado em roles (RBAC)
-- [x] Criar procedimento protegido para admin
-- [x] Implementar criptografia de dados sensíveis
-- [x] Configurar política de LGPD (consentimento, dados mínimos)
+## Fase 3: Multi-Usuário e Permissões
+- [x] Tela de gestão de usuários (admin) - listar, editar permissões
+- [x] Controle granular de permissões por módulo (visualizar, criar, editar, excluir)
+- [x] Bloqueio/liberação de funcionalidades por usuário
+- [x] Hook usePermissions no frontend para controle de acesso
+- [x] Middleware de permissões no backend (protectedProcedure com check)
+- [x] Sidebar dinâmica baseada nas permissões do usuário
 
-### Módulos de Controle (Backend)
-- [x] Criar módulo de controle de usuários
-- [x] Criar módulo de controle de lançamentos
-- [x] Criar módulo de controle de categorias
-- [x] Criar módulo de controle de contas bancárias
-- [ ] Criar módulo de controle de documentos
-- [x] Criar módulo de logs de auditoria
+## Fase 4: Cadastros Essenciais (CRUD completo)
+- [x] Página de Funcionários (listagem + busca + filtros + CRUD)
+- [x] Página de Clientes com Unidades (listagem + CRUD + unidades aninhadas)
+- [x] Página de Funções e Salários (listagem + CRUD)
+- [x] Página de Turnos (listagem + CRUD)
+- [x] Página de Centros de Custo (listagem + CRUD)
+- [x] Página de Fornecedores (listagem + busca + CRUD)
+- [x] CRUD Contas Bancárias
 
----
+## Fase 5: Contas a Pagar e Contas a Receber
+- [x] Página de Contas a Pagar com filtros avançados
+- [x] Página de Contas a Receber com filtros
+- [x] KPIs: Total a Pagar Pendente, Total Pago, Total a Receber Pendente, Total Recebido
+- [x] Lotes de Pagamento de Funcionários
+- [x] Formulário Nova Conta a Pagar / Nova Conta a Receber
+- [ ] Navegação por mês com setas e botão Exportar
 
-## Fase 2: Módulo de Lançamentos - Interface e Gerenciamento
+## Fase 6: Dashboard e Analytics
+- [x] Dashboard com KPIs (Faturamento Total, Custos Operacionais, Margem de Lucro, Total de Trabalhos)
+- [ ] Comparativo vs mês anterior com percentuais
+- [ ] Gráfico Evolução Financeira diária
+- [x] Analytics: filtros de período
+- [x] Analytics: Financeiro Consolidado
+- [ ] Analytics: Gráfico Evolução Mensal
+- [ ] Analytics: Composição de Despesas por categoria
 
-### Interface de Lançamentos
-- [x] Criar página de listagem de lançamentos
-- [ ] Criar formulário de novo lançamento (pagamento/recebimento)
-- [x] Implementar categorização de lançamentos
-- [x] Adicionar filtros (período, categoria, status)
-- [ ] Implementar edição e exclusão de lançamentos
-- [x] Adicionar validações de entrada
+## Fase 7: Testes e Entrega
+- [x] Testes unitários para RBAC e permissões
+- [x] Testes para operações financeiras (49 testes passando)
+- [x] Verificação TypeScript sem erros
+- [x] Checkpoint final
+- [ ] Entrega ao usuário
 
-### Gerenciamento de Categorias
-- [x] Criar interface de gerenciamento de categorias
-- [x] Permitir criar/editar/deletar categorias
-- [x] Associar categorias a lançamentos
-
-### Testes
-- [x] Criar testes para criação de lançamentos
-- [ ] Criar testes para edição de lançamentos
-- [ ] Criar testes para exclusão de lançamentos
-
----
-
-## Fase 3: Dashboard Financeiro - Visualização e Gráficos
-
-### Dashboard Principal
-- [x] Criar layout de dashboard com sidebar
-- [x] Exibir saldo total consolidado
-- [x] Exibir receitas do período
-- [x] Exibir despesas do período
-- [x] Exibir fluxo de caixa (entradas vs saídas)
-
-### Gráficos e Visualizações
-- [x] Gráfico de fluxo de caixa (linha/coluna)
-- [x] Gráfico de despesas por categoria (pizza/donut)
-- [x] Gráfico de receitas por categoria (pizza/donut)
-- [ ] Gráfico de evolução mensal (linha)
-- [x] Indicadores KPI (saldo, receita, despesa)
-
-### Filtros e Períodos
-- [ ] Filtro por período (dia, semana, mês, ano, customizado)
-- [ ] Filtro por categoria
-- [ ] Filtro por status de conciliação
-
----
-
-## Fase 4: Upload e Processamento de Arquivos
-
-### Upload de Arquivos
-- [x] Implementar interface de upload (drag-and-drop)
-- [x] Suportar formatos: OFX, XML, PDF, PNG, JPG
-- [x] Validar tamanho e tipo de arquivo
-- [x] Armazenar arquivos em S3 com referências no BD
-
-### Processamento de Arquivos
-- [x] Parser para OFX (extratos bancários)
-- [x] Parser para XML (notas fiscais)
-- [x] Extrator de dados de PDF (OCR/LLM)
-- [x] Extrator de dados de imagens (OCR/LLM)
-
-### Testes
-- [ ] Criar testes de upload de arquivos
-- [ ] Criar testes de parsing de OFX
-- [ ] Criar testes de parsing de XML
-
----
-
-## Fase 5: Inteligência de Dados - Extração Automática com IA
-
-### Integração com LLM
-- [x] Configurar chamadas ao LLM para OCR de PDFs
-- [x] Configurar chamadas ao LLM para OCR de imagens
-- [x] Extrair dados estruturados de documentos
-- [x] Sugerir categorização automática
-
-### Processamento Inteligente
-- [x] Identificar tipo de documento (nota fiscal, recibo, etc)
-- [x] Extrair valor, data, fornecedor/cliente
-- [x] Validar dados extraídos
-- [ ] Propor lançamentos automáticos
-
-### Testes
-- [ ] Criar testes de extração de dados de PDF
-- [ ] Criar testes de extração de dados de imagens
-- [ ] Criar testes de categorização automática
-
----
-
-## Fase 6: Conciliação Bancária - Cruzamento Automático
-
-### Lógica de Conciliação
-- [x] Implementar algoritmo de matching entre extratos e lançamentos
-- [x] Suportar matching por valor, data e descrição
-- [x] Identificar lançamentos não conciliados
-- [ ] Identificar transações duplicadas
-
-### Interface de Conciliação
-- [ ] Criar página de conciliação bancária
-- [ ] Exibir lançamentos pendentes vs extratos
-- [ ] Permitir conciliação manual
-- [ ] Exibir status de conciliação (conciliado, pendente, divergência)
-
-### Testes
-- [ ] Criar testes de matching automático
-- [ ] Criar testes de detecção de duplicatas
-- [ ] Criar testes de conciliação manual
-
----
-
-## Fase 7: Alertas, Notificações e Relatórios
-
-### Sistema de Alertas
-- [x] Alertas de vencimento de pagamentos
-- [x] Alertas de recebimentos atrasados
-- [x] Alertas de saldo baixo
-- [x] Alertas de divergências na conciliação
-
-### Notificações
-- [x] Implementar notificações no sistema
-- [ ] Enviar notificações por email (opcional)
-- [ ] Exibir notificações no dashboard
-
-### Relatórios
-- [ ] Relatório de fluxo de caixa
-- [ ] Relatório de despesas por categoria
-- [ ] Relatório de receitas por categoria
-- [ ] Relatório de conciliação bancária
-- [ ] Exportar relatórios em PDF/Excel
-
-### Testes
-- [ ] Criar testes de geração de alertas
-- [ ] Criar testes de geração de relatórios
-
----
-
-## Fase 8: Auditoria e Segurança - Logs e Conformidade LGPD
-
-### Logs de Auditoria
-- [ ] Registrar todas as operações financeiras sensíveis
-- [ ] Incluir usuário, data/hora, operação, valores
-- [ ] Permitir consulta de logs por período
-- [ ] Implementar retenção de logs
-
-### Conformidade LGPD
-- [ ] Criar política de privacidade
-- [ ] Implementar consentimento para coleta de dados
-- [ ] Permitir exportação de dados do usuário
-- [ ] Permitir exclusão de dados (direito ao esquecimento)
-- [ ] Documentar processamento de dados sensíveis
-
-### Segurança Adicional
-- [ ] Implementar rate limiting
-- [ ] Implementar validação de entrada
-- [ ] Implementar proteção contra SQL injection
-- [ ] Implementar proteção contra XSS
-
-### Testes
-- [ ] Criar testes de logs de auditoria
-- [ ] Criar testes de conformidade LGPD
-
----
-
-## Entrega Final
-
-- [ ] Documentação técnica completa
-- [ ] Guia de uso para usuários
-- [ ] Guia de administração
-- [ ] Checkpoint final e publicação
+## Branding ML Serviços
+- [x] Integrar domínio mlservicoseco.com.br na identidade visual do sistema
+- [x] Configurar dados da empresa (nome, domínio, emails) como padrão no sistema

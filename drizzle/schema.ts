@@ -9,12 +9,12 @@ import {
   boolean,
   datetime,
   longtext,
+  time,
 } from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extended with financial system requirements.
- */
+// ============================================================
+// AUTH - Tabela de usuários do sistema (OAuth)
+// ============================================================
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
@@ -30,33 +30,144 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-/**
- * Transaction Categories - Categorização de lançamentos
- */
-export const categories = mysqlTable("categories", {
+// ============================================================
+// CADASTROS - Entidades base do negócio
+// ============================================================
+
+/** Funcionários / Diaristas */
+export const employees = mysqlTable("employees", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  name: varchar("name", { length: 100 }).notNull(),
-  description: text("description"),
-  type: mysqlEnum("type", ["income", "expense"]).notNull(),
-  color: varchar("color", { length: 7 }), // Hex color
+  name: varchar("name", { length: 255 }).notNull(),
+  cpf: varchar("cpf", { length: 14 }).unique(), // 000.000.000-00
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 20 }),
+  city: varchar("city", { length: 100 }),
+  pixKey: varchar("pixKey", { length: 255 }), // Chave PIX (CPF, email, telefone, aleatória)
+  pixKeyType: mysqlEnum("pixKeyType", ["cpf", "email", "phone", "random", "cnpj"]),
+  status: mysqlEnum("status", ["diarista", "inativo", "pendente"]).default("diarista").notNull(),
+  admissionDate: datetime("admissionDate"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = typeof employees.$inferInsert;
+
+/** Clientes (Empresas de logística) */
+export const clients = mysqlTable("clients", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 20 }),
+  city: varchar("city", { length: 100 }),
+  address: varchar("address", { length: 500 }),
+  contactName: varchar("contactName", { length: 255 }),
+  contactPhone: varchar("contactPhone", { length: 20 }),
+  contactEmail: varchar("contactEmail", { length: 320 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type Category = typeof categories.$inferSelect;
-export type InsertCategory = typeof categories.$inferInsert;
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = typeof clients.$inferInsert;
 
-/**
- * Bank Accounts - Contas bancárias do usuário
- */
+/** Unidades / Locais dentro do cliente */
+export const clientUnits = mysqlTable("client_units", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("clientId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // ex: Sorotama, Base, Dufrio, RG
+  address: varchar("address", { length: 500 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClientUnit = typeof clientUnits.$inferSelect;
+export type InsertClientUnit = typeof clientUnits.$inferInsert;
+
+/** Funções e Salários (Aux. Carga e Descarga, Líder, etc.) */
+export const jobFunctions = mysqlTable("job_functions", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // ex: Aux. Carga e Descarga
+  defaultPayValue: decimal("defaultPayValue", { precision: 10, scale: 2 }), // Valor padrão que paga ao diarista
+  defaultReceiveValue: decimal("defaultReceiveValue", { precision: 10, scale: 2 }), // Valor padrão que recebe do cliente
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JobFunction = typeof jobFunctions.$inferSelect;
+export type InsertJobFunction = typeof jobFunctions.$inferInsert;
+
+/** Funções associadas a cada Cliente (com valores específicos) */
+export const clientFunctions = mysqlTable("client_functions", {
+  id: int("id").autoincrement().primaryKey(),
+  clientId: int("clientId").notNull(),
+  jobFunctionId: int("jobFunctionId").notNull(),
+  payValue: decimal("payValue", { precision: 10, scale: 2 }), // Valor que paga ao diarista neste cliente
+  receiveValue: decimal("receiveValue", { precision: 10, scale: 2 }), // Valor que recebe do cliente
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClientFunction = typeof clientFunctions.$inferSelect;
+export type InsertClientFunction = typeof clientFunctions.$inferInsert;
+
+/** Turnos de trabalho (MLT-1 a MLT-13) */
+export const shifts = mysqlTable("shifts", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(), // ex: MLT-1, MLT-2
+  startTime: time("startTime").notNull(), // 06:00
+  endTime: time("endTime").notNull(), // 15:00
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Shift = typeof shifts.$inferSelect;
+export type InsertShift = typeof shifts.$inferInsert;
+
+/** Centros de Custo */
+export const costCenters = mysqlTable("cost_centers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CostCenter = typeof costCenters.$inferSelect;
+export type InsertCostCenter = typeof costCenters.$inferInsert;
+
+/** Fornecedores */
+export const suppliers = mysqlTable("suppliers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 20 }),
+  city: varchar("city", { length: 100 }),
+  pixKey: varchar("pixKey", { length: 255 }),
+  contactPhone: varchar("contactPhone", { length: 20 }),
+  contactEmail: varchar("contactEmail", { length: 320 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Supplier = typeof suppliers.$inferSelect;
+export type InsertSupplier = typeof suppliers.$inferInsert;
+
+// ============================================================
+// FINANCEIRO - Contas a Pagar e Receber
+// ============================================================
+
+/** Contas Bancárias da empresa */
 export const bankAccounts = mysqlTable("bank_accounts", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   bankName: varchar("bankName", { length: 100 }),
   accountNumber: varchar("accountNumber", { length: 50 }),
+  agency: varchar("agency", { length: 20 }),
   accountType: mysqlEnum("accountType", ["checking", "savings", "investment"]).default("checking"),
   initialBalance: decimal("initialBalance", { precision: 15, scale: 2 }).default("0"),
   currentBalance: decimal("currentBalance", { precision: 15, scale: 2 }).default("0"),
@@ -68,51 +179,107 @@ export const bankAccounts = mysqlTable("bank_accounts", {
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type InsertBankAccount = typeof bankAccounts.$inferInsert;
 
-/**
- * Financial Transactions - Lançamentos de pagamentos e recebimentos
- */
-export const transactions = mysqlTable("transactions", {
+/** Contas a Pagar */
+export const accountsPayable = mysqlTable("accounts_payable", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  bankAccountId: int("bankAccountId"),
-  categoryId: int("categoryId"),
-  type: mysqlEnum("type", ["income", "expense"]).notNull(),
   description: varchar("description", { length: 255 }).notNull(),
+  supplierId: int("supplierId"),
+  clientId: int("clientId"),
+  costCenterId: int("costCenterId"),
+  bankAccountId: int("bankAccountId"),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  transactionDate: datetime("transactionDate").notNull(),
-  dueDate: datetime("dueDate"),
+  dueDate: datetime("dueDate").notNull(),
   paymentDate: datetime("paymentDate"),
-  status: mysqlEnum("status", ["pending", "paid", "overdue", "cancelled"]).default("pending").notNull(),
-  reconciliationStatus: mysqlEnum("reconciliationStatus", ["unreconciled", "reconciled", "disputed"]).default("unreconciled").notNull(),
-  reference: varchar("reference", { length: 100 }), // Número de nota fiscal, cheque, etc
+  status: mysqlEnum("status", ["pendente", "pago", "vencido", "cancelado"]).default("pendente").notNull(),
+  notes: text("notes"),
+  documentUrl: varchar("documentUrl", { length: 500 }), // Comprovante em S3
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AccountPayable = typeof accountsPayable.$inferSelect;
+export type InsertAccountPayable = typeof accountsPayable.$inferInsert;
+
+/** Contas a Receber */
+export const accountsReceivable = mysqlTable("accounts_receivable", {
+  id: int("id").autoincrement().primaryKey(),
+  description: varchar("description", { length: 255 }).notNull(),
+  clientId: int("clientId"),
+  costCenterId: int("costCenterId"),
+  bankAccountId: int("bankAccountId"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  dueDate: datetime("dueDate").notNull(),
+  receiveDate: datetime("receiveDate"),
+  status: mysqlEnum("status", ["pendente", "recebido", "vencido", "cancelado"]).default("pendente").notNull(),
+  notes: text("notes"),
+  documentUrl: varchar("documentUrl", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AccountReceivable = typeof accountsReceivable.$inferSelect;
+export type InsertAccountReceivable = typeof accountsReceivable.$inferInsert;
+
+/** Lotes de Pagamento de Funcionários */
+export const paymentBatches = mysqlTable("payment_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(), // ex: "Mar/2026 - Todos os Funcionários"
+  periodStart: datetime("periodStart").notNull(),
+  periodEnd: datetime("periodEnd").notNull(),
+  totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0"),
+  employeeCount: int("employeeCount").default(0),
+  status: mysqlEnum("status", ["pendente", "pago", "cancelado"]).default("pendente").notNull(),
+  paidAt: datetime("paidAt"),
+  bankAccountId: int("bankAccountId"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type Transaction = typeof transactions.$inferSelect;
-export type InsertTransaction = typeof transactions.$inferInsert;
+export type PaymentBatch = typeof paymentBatches.$inferSelect;
+export type InsertPaymentBatch = typeof paymentBatches.$inferInsert;
 
-/**
- * Fiscal Documents - Notas fiscais, recibos e comprovantes
- */
+/** Itens do Lote de Pagamento */
+export const paymentBatchItems = mysqlTable("payment_batch_items", {
+  id: int("id").autoincrement().primaryKey(),
+  batchId: int("batchId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  daysWorked: int("daysWorked").default(0),
+  dailyRate: decimal("dailyRate", { precision: 10, scale: 2 }).default("0"),
+  mealAllowance: decimal("mealAllowance", { precision: 10, scale: 2 }).default("0"), // Marmita
+  bonus: decimal("bonus", { precision: 10, scale: 2 }).default("0"),
+  voucher: decimal("voucher", { precision: 10, scale: 2 }).default("0"), // Vale
+  totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0"),
+  pixKey: varchar("pixKey", { length: 255 }), // Snapshot da chave PIX no momento do pagamento
+  status: mysqlEnum("status", ["pendente", "pago", "erro"]).default("pendente").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaymentBatchItem = typeof paymentBatchItems.$inferSelect;
+export type InsertPaymentBatchItem = typeof paymentBatchItems.$inferInsert;
+
+// ============================================================
+// DOCUMENTOS E AUDITORIA
+// ============================================================
+
+/** Documentos Fiscais */
 export const fiscalDocuments = mysqlTable("fiscal_documents", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  transactionId: int("transactionId"),
-  documentType: mysqlEnum("documentType", ["invoice", "receipt", "bill", "proof"]).notNull(),
+  documentType: mysqlEnum("documentType", ["invoice", "receipt", "bill", "proof", "order_of_service"]).notNull(),
   documentNumber: varchar("documentNumber", { length: 100 }),
+  relatedEntityType: varchar("relatedEntityType", { length: 50 }), // accounts_payable, accounts_receivable
+  relatedEntityId: int("relatedEntityId"),
   issuerName: varchar("issuerName", { length: 255 }),
   issuerCNPJ: varchar("issuerCNPJ", { length: 20 }),
   amount: decimal("amount", { precision: 15, scale: 2 }),
   issueDate: datetime("issueDate"),
-  dueDate: datetime("dueDate"),
   description: text("description"),
-  s3Key: varchar("s3Key", { length: 500 }), // Referência ao arquivo em S3
-  s3Url: varchar("s3Url", { length: 500 }), // URL pública do arquivo
-  mimeType: varchar("mimeType", { length: 50 }), // application/pdf, image/jpeg, etc
-  fileSize: int("fileSize"), // Tamanho em bytes
-  extractedData: longtext("extractedData"), // JSON com dados extraídos pela IA
+  s3Key: varchar("s3Key", { length: 500 }),
+  s3Url: varchar("s3Url", { length: 500 }),
+  mimeType: varchar("mimeType", { length: 50 }),
+  fileSize: int("fileSize"),
+  extractedData: longtext("extractedData"),
   status: mysqlEnum("status", ["pending", "processed", "verified", "archived"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -121,81 +288,30 @@ export const fiscalDocuments = mysqlTable("fiscal_documents", {
 export type FiscalDocument = typeof fiscalDocuments.$inferSelect;
 export type InsertFiscalDocument = typeof fiscalDocuments.$inferInsert;
 
-/**
- * Bank Statements - Extratos bancários (OFX)
- */
-export const bankStatements = mysqlTable("bank_statements", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  bankAccountId: int("bankAccountId").notNull(),
-  statementDate: datetime("statementDate").notNull(),
-  startDate: datetime("startDate"),
-  endDate: datetime("endDate"),
-  openingBalance: decimal("openingBalance", { precision: 15, scale: 2 }),
-  closingBalance: decimal("closingBalance", { precision: 15, scale: 2 }),
-  s3Key: varchar("s3Key", { length: 500 }), // Referência ao arquivo OFX em S3
-  s3Url: varchar("s3Url", { length: 500 }), // URL pública do arquivo
-  totalTransactions: int("totalTransactions").default(0),
-  processedTransactions: int("processedTransactions").default(0),
-  status: mysqlEnum("status", ["pending", "processing", "completed", "error"]).default("pending").notNull(),
-  errorMessage: text("errorMessage"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type BankStatement = typeof bankStatements.$inferSelect;
-export type InsertBankStatement = typeof bankStatements.$inferInsert;
-
-/**
- * Reconciliation Matches - Relacionamento entre transações e extratos bancários
- */
-export const reconciliationMatches = mysqlTable("reconciliation_matches", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  transactionId: int("transactionId").notNull(),
-  bankStatementId: int("bankStatementId"),
-  matchType: mysqlEnum("matchType", ["auto", "manual", "suggested"]).default("auto").notNull(),
-  confidence: int("confidence"), // 0-100, confiança do match automático
-  status: mysqlEnum("status", ["matched", "disputed", "unmatched"]).default("matched").notNull(),
-  notes: text("notes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type ReconciliationMatch = typeof reconciliationMatches.$inferSelect;
-export type InsertReconciliationMatch = typeof reconciliationMatches.$inferInsert;
-
-/**
- * Audit Logs - Logs de auditoria para operações sensíveis
- */
+/** Logs de Auditoria */
 export const auditLogs = mysqlTable("audit_logs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  action: varchar("action", { length: 100 }).notNull(), // CREATE, UPDATE, DELETE, RECONCILE, etc
-  entityType: varchar("entityType", { length: 50 }).notNull(), // transaction, document, account, etc
+  action: varchar("action", { length: 100 }).notNull(),
+  entityType: varchar("entityType", { length: 50 }).notNull(),
   entityId: int("entityId"),
-  oldValues: longtext("oldValues"), // JSON com valores anteriores
-  newValues: longtext("newValues"), // JSON com novos valores
+  oldValues: longtext("oldValues"),
+  newValues: longtext("newValues"),
   ipAddress: varchar("ipAddress", { length: 45 }),
-  userAgent: text("userAgent"),
   status: mysqlEnum("status", ["success", "failure"]).default("success").notNull(),
-  errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 
-/**
- * Notifications - Notificações de alertas e vencimentos
- */
+/** Notificações */
 export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  type: mysqlEnum("type", ["payment_due", "payment_overdue", "low_balance", "reconciliation_alert", "system"]).notNull(),
+  type: mysqlEnum("type", ["payment_due", "payment_overdue", "low_balance", "system", "alert"]).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message"),
-  relatedTransactionId: int("relatedTransactionId"),
   isRead: boolean("isRead").default(false).notNull(),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -204,18 +320,38 @@ export const notifications = mysqlTable("notifications", {
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
-/**
- * User Consent - Rastreamento de consentimento LGPD
- */
-export const userConsent = mysqlTable("user_consent", {
+/** Permissões granulares por módulo por usuário */
+export const userPermissions = mysqlTable("user_permissions", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull().unique(),
-  privacyPolicyAccepted: boolean("privacyPolicyAccepted").default(false).notNull(),
-  dataProcessingAccepted: boolean("dataProcessingAccepted").default(false).notNull(),
-  acceptedAt: timestamp("acceptedAt"),
+  userId: int("userId").notNull(),
+  module: varchar("module", { length: 50 }).notNull(), // dashboard, employees, clients, suppliers, shifts, functions, cost_centers, bank_accounts, accounts_payable, accounts_receivable, payment_batches, documents, analytics, users
+  canView: boolean("canView").default(false).notNull(),
+  canCreate: boolean("canCreate").default(false).notNull(),
+  canEdit: boolean("canEdit").default(false).notNull(),
+  canDelete: boolean("canDelete").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type UserConsent = typeof userConsent.$inferSelect;
-export type InsertUserConsent = typeof userConsent.$inferInsert;
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = typeof userPermissions.$inferInsert;
+
+/** Módulos disponíveis no sistema */
+export const SYSTEM_MODULES = [
+  "dashboard",
+  "employees",
+  "clients",
+  "suppliers",
+  "shifts",
+  "functions",
+  "cost_centers",
+  "bank_accounts",
+  "accounts_payable",
+  "accounts_receivable",
+  "payment_batches",
+  "documents",
+  "analytics",
+  "users",
+] as const;
+
+export type SystemModule = typeof SYSTEM_MODULES[number];
