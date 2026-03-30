@@ -1,30 +1,62 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "wouter";
+import { useState } from "react";
+import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 export default function LeaderScheduleDetail() {
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const params = useParams();
   const scheduleId = params.scheduleId ? parseInt(params.scheduleId) : 0;
 
-  const [selectedAllocationId, setSelectedAllocationId] = useState<number | null>(null);
+  const [selectedAllocationId, setSelectedAllocationId] = useState<
+    number | null
+  >(null);
   const [attendanceStatus, setAttendanceStatus] = useState<string>("presente");
   const [attendanceNotes, setAttendanceNotes] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Queries
-  const { data: schedule, isLoading, refetch } = trpc.portalLider.getScheduleDetail.useQuery(scheduleId);
+  const {
+    data: schedule,
+    isLoading,
+    refetch,
+  } = trpc.portalLider.getScheduleDetail.useQuery(scheduleId);
 
   // Mutations
   const checkInMutation = trpc.portalLider.checkIn.useMutation({
@@ -69,7 +101,10 @@ export default function LeaderScheduleDetail() {
     checkOutMutation.mutate({ allocationId, scheduleId });
   };
 
-  const handleOpenAttendanceDialog = (allocationId: number, currentStatus: string) => {
+  const handleOpenAttendanceDialog = (
+    allocationId: number,
+    currentStatus: string
+  ) => {
     setSelectedAllocationId(allocationId);
     setAttendanceStatus(currentStatus || "presente");
     setAttendanceNotes("");
@@ -120,9 +155,13 @@ export default function LeaderScheduleDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Detalhes do Planejamento</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Detalhes do Planejamento
+          </h1>
           <p className="text-muted-foreground mt-2">
-            {format(new Date(schedule.date), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+            {format(new Date(schedule.date), "EEEE, dd 'de' MMMM 'de' yyyy", {
+              locale: ptBR,
+            })}
           </p>
         </div>
         <Button variant="outline" onClick={() => navigate("/leader-portal")}>
@@ -146,12 +185,16 @@ export default function LeaderScheduleDetail() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{schedule.shiftName || "—"}</p>
-            <p className="text-xs text-muted-foreground">{schedule.shiftTime || ""}</p>
+            <p className="text-xs text-muted-foreground">
+              {schedule.shiftTime || ""}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total de Pessoas</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total de Pessoas
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{schedule.totalPeople}</p>
@@ -162,7 +205,9 @@ export default function LeaderScheduleDetail() {
             <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">R$ {parseFloat(String(schedule.totalPayValue || 0)).toFixed(2)}</p>
+            <p className="text-2xl font-bold">
+              R$ {parseFloat(String(schedule.totalPayValue || 0)).toFixed(2)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -206,36 +251,56 @@ export default function LeaderScheduleDetail() {
                 <TableBody>
                   {schedule.allocations.map((alloc: any) => (
                     <TableRow key={alloc.id}>
-                      <TableCell className="font-medium">{alloc.employeeName}</TableCell>
-                      <TableCell className="text-sm">{alloc.employeeCpf}</TableCell>
-                      <TableCell className="text-sm">{alloc.employeePixKey || "—"}</TableCell>
-                      <TableCell>R$ {parseFloat(String(alloc.payValue || 0)).toFixed(2)}</TableCell>
+                      <TableCell className="font-medium">
+                        {alloc.employeeName}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {alloc.employeeCpf}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {alloc.employeePixKey || "—"}
+                      </TableCell>
+                      <TableCell>
+                        R$ {parseFloat(String(alloc.payValue || 0)).toFixed(2)}
+                      </TableCell>
                       <TableCell>
                         {alloc.checkInTime ? (
                           <span className="text-sm">
-                            {format(new Date(alloc.checkInTime), "HH:mm", { locale: ptBR })}
+                            {format(new Date(alloc.checkInTime), "HH:mm", {
+                              locale: ptBR,
+                            })}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Não registrado</span>
+                          <span className="text-xs text-muted-foreground">
+                            Não registrado
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
                         {alloc.checkOutTime ? (
                           <span className="text-sm">
-                            {format(new Date(alloc.checkOutTime), "HH:mm", { locale: ptBR })}
+                            {format(new Date(alloc.checkOutTime), "HH:mm", {
+                              locale: ptBR,
+                            })}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Não registrado</span>
+                          <span className="text-xs text-muted-foreground">
+                            Não registrado
+                          </span>
                         )}
                       </TableCell>
-                      <TableCell>{getStatusBadge(alloc.attendanceStatus || "presente")}</TableCell>
+                      <TableCell>
+                        {getStatusBadge(alloc.attendanceStatus || "presente")}
+                      </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleCheckIn(alloc.id)}
-                            disabled={!!alloc.checkInTime || checkInMutation.isPending}
+                            disabled={
+                              !!alloc.checkInTime || checkInMutation.isPending
+                            }
                           >
                             {checkInMutation.isPending ? "..." : "Check-in"}
                           </Button>
@@ -243,16 +308,30 @@ export default function LeaderScheduleDetail() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleCheckOut(alloc.id)}
-                            disabled={!alloc.checkInTime || !!alloc.checkOutTime || checkOutMutation.isPending}
+                            disabled={
+                              !alloc.checkInTime ||
+                              !!alloc.checkOutTime ||
+                              checkOutMutation.isPending
+                            }
                           >
                             {checkOutMutation.isPending ? "..." : "Check-out"}
                           </Button>
-                          <Dialog open={isDialogOpen && selectedAllocationId === alloc.id} onOpenChange={setIsDialogOpen}>
+                          <Dialog
+                            open={
+                              isDialogOpen && selectedAllocationId === alloc.id
+                            }
+                            onOpenChange={setIsDialogOpen}
+                          >
                             <DialogTrigger asChild>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleOpenAttendanceDialog(alloc.id, alloc.attendanceStatus)}
+                                onClick={() =>
+                                  handleOpenAttendanceDialog(
+                                    alloc.id,
+                                    alloc.attendanceStatus
+                                  )
+                                }
                               >
                                 Presença
                               </Button>
@@ -266,33 +345,56 @@ export default function LeaderScheduleDetail() {
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div>
-                                  <label className="text-sm font-medium">Status</label>
-                                  <Select value={attendanceStatus} onValueChange={setAttendanceStatus}>
+                                  <label className="text-sm font-medium">
+                                    Status
+                                  </label>
+                                  <Select
+                                    value={attendanceStatus}
+                                    onValueChange={setAttendanceStatus}
+                                  >
                                     <SelectTrigger className="mt-1">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="presente">Presente</SelectItem>
-                                      <SelectItem value="faltou">Faltou</SelectItem>
-                                      <SelectItem value="parcial">Parcial</SelectItem>
+                                      <SelectItem value="presente">
+                                        Presente
+                                      </SelectItem>
+                                      <SelectItem value="faltou">
+                                        Faltou
+                                      </SelectItem>
+                                      <SelectItem value="parcial">
+                                        Parcial
+                                      </SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium">Observações</label>
+                                  <label className="text-sm font-medium">
+                                    Observações
+                                  </label>
                                   <Textarea
                                     value={attendanceNotes}
-                                    onChange={(e) => setAttendanceNotes(e.target.value)}
+                                    onChange={e =>
+                                      setAttendanceNotes(e.target.value)
+                                    }
                                     placeholder="Ex: Saiu mais cedo, motivo pessoal..."
                                     className="mt-1"
                                   />
                                 </div>
                                 <div className="flex gap-2 justify-end">
-                                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setIsDialogOpen(false)}
+                                  >
                                     Cancelar
                                   </Button>
-                                  <Button onClick={handleSaveAttendance} disabled={setAttendanceMutation.isPending}>
-                                    {setAttendanceMutation.isPending ? "Salvando..." : "Salvar"}
+                                  <Button
+                                    onClick={handleSaveAttendance}
+                                    disabled={setAttendanceMutation.isPending}
+                                  >
+                                    {setAttendanceMutation.isPending
+                                      ? "Salvando..."
+                                      : "Salvar"}
                                   </Button>
                                 </div>
                               </div>

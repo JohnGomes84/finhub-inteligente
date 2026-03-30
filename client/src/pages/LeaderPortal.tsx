@@ -1,22 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function LeaderPortal() {
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const [dateStart, setDateStart] = useState<string>("");
   const [dateEnd, setDateEnd] = useState<string>("");
 
   // Query para listar meus planejamentos
-  const { data: schedules, isLoading, refetch } = trpc.portalLider.mySchedules.useQuery({
+  const {
+    data: schedules,
+    isLoading,
+    refetch,
+  } = trpc.portalLider.mySchedules.useQuery({
     dateStart,
     dateEnd,
   });
@@ -44,7 +61,9 @@ export default function LeaderPortal() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Portal do Líder</h1>
-        <p className="text-muted-foreground mt-2">Gerencie seus planejamentos, check-ins e equipe</p>
+        <p className="text-muted-foreground mt-2">
+          Gerencie seus planejamentos, check-ins e equipe
+        </p>
       </div>
 
       {/* Filtros */}
@@ -59,7 +78,7 @@ export default function LeaderPortal() {
               <Input
                 type="date"
                 value={dateStart}
-                onChange={(e) => setDateStart(e.target.value)}
+                onChange={e => setDateStart(e.target.value)}
                 className="mt-1"
               />
             </div>
@@ -68,7 +87,7 @@ export default function LeaderPortal() {
               <Input
                 type="date"
                 value={dateEnd}
-                onChange={(e) => setDateEnd(e.target.value)}
+                onChange={e => setDateEnd(e.target.value)}
                 className="mt-1"
               />
             </div>
@@ -112,13 +131,20 @@ export default function LeaderPortal() {
                   {schedules.map((schedule: any) => (
                     <TableRow key={schedule.id}>
                       <TableCell>
-                        {format(new Date(schedule.date), "dd/MM/yyyy", { locale: ptBR })}
+                        {format(new Date(schedule.date), "dd/MM/yyyy", {
+                          locale: ptBR,
+                        })}
                       </TableCell>
-                      <TableCell className="font-medium">{schedule.clientName}</TableCell>
+                      <TableCell className="font-medium">
+                        {schedule.clientName}
+                      </TableCell>
                       <TableCell>{schedule.shiftName}</TableCell>
                       <TableCell>{schedule.totalPeople}</TableCell>
                       <TableCell>
-                        R$ {parseFloat(String(schedule.totalPayValue || 0)).toFixed(2)}
+                        R${" "}
+                        {parseFloat(
+                          String(schedule.totalPayValue || 0)
+                        ).toFixed(2)}
                       </TableCell>
                       <TableCell>{getStatusBadge(schedule.status)}</TableCell>
                       <TableCell>
