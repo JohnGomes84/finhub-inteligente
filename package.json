@@ -10,7 +10,11 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "ops:predeploy": "bash ./scripts/ops/pre-deploy-check.sh",
+    "ops:deploy": "bash ./scripts/ops/deploy.sh",
+    "ops:smoke": "bash ./scripts/ops/smoke-check.sh",
+    "ops:testapp": "bash ./scripts/ops/run-local-test.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
@@ -96,7 +100,7 @@
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.4",
     "esbuild": "^0.25.0",
-    "pnpm": "^10.15.1",
+    "pnpm": "^10.4.1",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.1.14",

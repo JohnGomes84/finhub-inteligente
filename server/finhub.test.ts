@@ -54,7 +54,9 @@ function createUnauthContext(): TrpcContext {
 
 // ============ TESTS ============
 
-describe("FinHub Inteligente - Router Tests", () => {
+const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+
+describeIfDb("FinHub Inteligente - Router Tests", () => {
   describe("auth.me", () => {
     it("returns user when authenticated", async () => {
       const ctx = createAdminContext();

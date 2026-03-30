@@ -3,17 +3,37 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
-  workSchedules, scheduleFunctions, scheduleAllocations,
-  employees, clients, clientUnits, shifts, jobFunctions,
+  workSchedules,
+  scheduleFunctions,
+  scheduleAllocations,
+  employees,
+  clients,
+  clientUnits,
+  shifts,
+  jobFunctions,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "../controle/permissionControl";
 import type { SystemModule } from "../../drizzle/schema";
+import { assertScheduleTransition } from "../_core/stateGuards";
+import {
+  assertScheduleEditable,
+  filterNewEmployeesWithoutDuplicate,
+} from "../_core/criticalFlows";
 
-async function requirePermission(userId: number, module: SystemModule, action: "canView" | "canCreate" | "canEdit" | "canDelete") {
+async function requirePermission(
+  userId: number,
+  userRole: string | undefined,
+  module: SystemModule,
+  action: "canView" | "canCreate" | "canEdit" | "canDelete"
+) {
+  if (userRole === "admin") return;
   const allowed = await checkPermission(userId, module, action);
   if (!allowed) {
-    throw new TRPCError({ code: "FORBIDDEN", message: `Sem permissão para ${action} em ${module}` });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `Sem permissão para ${action} em ${module}`,
+    });
   }
 }
 
@@ -21,36 +41,76 @@ async function requirePermission(userId: number, module: SystemModule, action: "
 async function recalcScheduleTotals(scheduleId: number) {
   const db = await getDb();
   if (!db) return;
-  const allocs = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.scheduleId, scheduleId));
-  const totalPay = allocs.reduce((sum, a) => sum + parseFloat(String(a.payValue || "0")), 0);
-  const totalReceive = allocs.reduce((sum, a) => sum + parseFloat(String(a.receiveValue || "0")), 0);
+  const allocs = await db
+    .select()
+    .from(scheduleAllocations)
+    .where(eq(scheduleAllocations.scheduleId, scheduleId));
+  const totalPay = allocs.reduce(
+    (sum, a) => sum + parseFloat(String(a.payValue || "0")),
+    0
+  );
+  const totalReceive = allocs.reduce(
+    (sum, a) => sum + parseFloat(String(a.receiveValue || "0")),
+    0
+  );
   const totalPeople = allocs.length;
-  await db.update(workSchedules).set({
-    totalPayValue: totalPay.toFixed(2),
-    totalReceiveValue: totalReceive.toFixed(2),
-    totalPeople,
-  }).where(eq(workSchedules.id, scheduleId));
+  await db
+    .update(workSchedules)
+    .set({
+      totalPayValue: totalPay.toFixed(2),
+      totalReceiveValue: totalReceive.toFixed(2),
+      totalPeople,
+    })
+    .where(eq(workSchedules.id, scheduleId));
+}
+
+async function getScheduleOrThrow(scheduleId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  const [schedule] = await db
+    .select()
+    .from(workSchedules)
+    .where(eq(workSchedules.id, scheduleId))
+    .limit(1);
+  if (!schedule)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Planejamento não encontrado",
+    });
+  return { db, schedule };
 }
 
 export const planejamentosRouter = router({
   // ============ LISTAGEM COM FILTROS ============
   list: protectedProcedure
-    .input(z.object({
-      dateStart: z.string().optional(),
-      dateEnd: z.string().optional(),
-      clientId: z.number().optional(),
-      shiftId: z.number().optional(),
-      clientUnitId: z.number().optional(),
-      status: z.enum(["pendente", "validado", "cancelado"]).optional(),
-      employeeSearch: z.string().optional(),
-    }).optional())
+    .input(
+      z
+        .object({
+          dateStart: z.string().optional(),
+          dateEnd: z.string().optional(),
+          clientId: z.number().optional(),
+          shiftId: z.number().optional(),
+          clientUnitId: z.number().optional(),
+          status: z.enum(["pendente", "validado", "cancelado"]).optional(),
+          employeeSearch: z.string().optional(),
+        })
+        .optional()
+    )
     .query(async ({ ctx, input }) => {
-      await requirePermission(ctx.user.id, "schedules", "canView");
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canView"
+      );
       const db = await getDb();
       if (!db) return [];
 
       // Buscar todos os schedules
-      let results = await db.select().from(workSchedules).orderBy(desc(workSchedules.date));
+      let results = await db
+        .select()
+        .from(workSchedules)
+        .orderBy(desc(workSchedules.date));
 
       // Filtros
       if (input?.dateStart) {
@@ -62,10 +122,14 @@ export const planejamentosRouter = router({
         de.setHours(23, 59, 59);
         results = results.filter(r => new Date(r.date) <= de);
       }
-      if (input?.clientId) results = results.filter(r => r.clientId === input.clientId);
-      if (input?.shiftId) results = results.filter(r => r.shiftId === input.shiftId);
-      if (input?.clientUnitId) results = results.filter(r => r.clientUnitId === input.clientUnitId);
-      if (input?.status) results = results.filter(r => r.status === input.status);
+      if (input?.clientId)
+        results = results.filter(r => r.clientId === input.clientId);
+      if (input?.shiftId)
+        results = results.filter(r => r.shiftId === input.shiftId);
+      if (input?.clientUnitId)
+        results = results.filter(r => r.clientUnitId === input.clientUnitId);
+      if (input?.status)
+        results = results.filter(r => r.status === input.status);
 
       // Filtro por funcionário: buscar scheduleIds que contêm esse funcionário
       if (input?.employeeSearch) {
@@ -75,7 +139,8 @@ export const planejamentosRouter = router({
           .filter(e => e.name.toLowerCase().includes(s) || e.cpf?.includes(s))
           .map(e => e.id);
         if (matchedEmpIds.length === 0) return [];
-        const allocs = await db.select({ scheduleId: scheduleAllocations.scheduleId })
+        const allocs = await db
+          .select({ scheduleId: scheduleAllocations.scheduleId })
           .from(scheduleAllocations)
           .where(inArray(scheduleAllocations.employeeId, matchedEmpIds));
         const scheduleIds = Array.from(new Set(allocs.map(a => a.scheduleId)));
@@ -98,86 +163,133 @@ export const planejamentosRouter = router({
         clientName: clientMap[r.clientId]?.name || "—",
         clientCity: clientMap[r.clientId]?.city || "",
         shiftName: r.shiftId ? shiftMap[r.shiftId]?.name || "—" : "—",
-        shiftTime: r.shiftId ? `${shiftMap[r.shiftId]?.startTime || ""} - ${shiftMap[r.shiftId]?.endTime || ""}` : "",
+        shiftTime: r.shiftId
+          ? `${shiftMap[r.shiftId]?.startTime || ""} - ${shiftMap[r.shiftId]?.endTime || ""}`
+          : "",
         unitName: r.clientUnitId ? unitMap[r.clientUnitId]?.name || "—" : "—",
       }));
     }),
 
   // ============ DETALHES COMPLETOS ============
-  getById: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-    await requirePermission(ctx.user.id, "schedules", "canView");
-    const db = await getDb();
-    if (!db) return null;
+  getById: protectedProcedure
+    .input(z.number())
+    .query(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canView"
+      );
+      const db = await getDb();
+      if (!db) return null;
 
-    const [schedule] = await db.select().from(workSchedules).where(eq(workSchedules.id, input)).limit(1);
-    if (!schedule) return null;
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input))
+        .limit(1);
+      if (!schedule) return null;
 
-    // Buscar funções do planejamento
-    const funcs = await db.select().from(scheduleFunctions).where(eq(scheduleFunctions.scheduleId, input));
+      // Buscar funções do planejamento
+      const funcs = await db
+        .select()
+        .from(scheduleFunctions)
+        .where(eq(scheduleFunctions.scheduleId, input));
 
-    // Buscar alocações
-    const allocs = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.scheduleId, input));
+      // Buscar alocações
+      const allocs = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.scheduleId, input));
 
-    // Buscar dados auxiliares
-    const [allJobFuncs, allEmps] = await Promise.all([
-      db.select().from(jobFunctions),
-      db.select().from(employees),
-    ]);
-    const jfMap = Object.fromEntries(allJobFuncs.map(j => [j.id, j]));
-    const empMap = Object.fromEntries(allEmps.map(e => [e.id, e]));
+      // Buscar dados auxiliares
+      const [allJobFuncs, allEmps] = await Promise.all([
+        db.select().from(jobFunctions),
+        db.select().from(employees),
+      ]);
+      const jfMap = Object.fromEntries(allJobFuncs.map(j => [j.id, j]));
+      const empMap = Object.fromEntries(allEmps.map(e => [e.id, e]));
 
-    // Montar estrutura hierárquica
-    const functionsWithAllocations = funcs.map(f => {
-      const funcAllocs = allocs.filter(a => a.scheduleFunctionId === f.id);
+      // Montar estrutura hierárquica
+      const functionsWithAllocations = funcs.map(f => {
+        const funcAllocs = allocs.filter(a => a.scheduleFunctionId === f.id);
+        return {
+          ...f,
+          jobFunctionName: jfMap[f.jobFunctionId]?.name || "—",
+          allocatedCount: funcAllocs.length,
+          allocations: funcAllocs.map(a => ({
+            ...a,
+            employeeName: empMap[a.employeeId]?.name || "—",
+            employeeCpf: empMap[a.employeeId]?.cpf || "",
+            employeeCity: empMap[a.employeeId]?.city || "",
+            isPaid: a.paymentBatchId !== null,
+          })),
+        };
+      });
+
+      // Dados do cliente, turno, unidade
+      const [clientData] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, schedule.clientId))
+        .limit(1);
+      const shiftData = schedule.shiftId
+        ? (
+            await db
+              .select()
+              .from(shifts)
+              .where(eq(shifts.id, schedule.shiftId))
+              .limit(1)
+          )[0]
+        : null;
+      const unitData = schedule.clientUnitId
+        ? (
+            await db
+              .select()
+              .from(clientUnits)
+              .where(eq(clientUnits.id, schedule.clientUnitId))
+              .limit(1)
+          )[0]
+        : null;
+
+      // Unidades do cliente (para o select)
+      const units = await db
+        .select()
+        .from(clientUnits)
+        .where(eq(clientUnits.clientId, schedule.clientId));
+
       return {
-        ...f,
-        jobFunctionName: jfMap[f.jobFunctionId]?.name || "—",
-        allocatedCount: funcAllocs.length,
-        allocations: funcAllocs.map(a => ({
-          ...a,
-          employeeName: empMap[a.employeeId]?.name || "—",
-          employeeCpf: empMap[a.employeeId]?.cpf || "",
-          employeeCity: empMap[a.employeeId]?.city || "",
-          isPaid: a.paymentBatchId !== null,
-        })),
+        ...schedule,
+        clientName: clientData?.name || "—",
+        shiftName: shiftData?.name || null,
+        shiftTime: shiftData
+          ? `${shiftData.startTime} - ${shiftData.endTime}`
+          : null,
+        unitName: unitData?.name || null,
+        clientUnits: units,
+        functions: functionsWithAllocations,
       };
-    });
-
-    // Dados do cliente, turno, unidade
-    const [clientData] = await db.select().from(clients).where(eq(clients.id, schedule.clientId)).limit(1);
-    const shiftData = schedule.shiftId
-      ? (await db.select().from(shifts).where(eq(shifts.id, schedule.shiftId)).limit(1))[0]
-      : null;
-    const unitData = schedule.clientUnitId
-      ? (await db.select().from(clientUnits).where(eq(clientUnits.id, schedule.clientUnitId)).limit(1))[0]
-      : null;
-
-    // Unidades do cliente (para o select)
-    const units = await db.select().from(clientUnits).where(eq(clientUnits.clientId, schedule.clientId));
-
-    return {
-      ...schedule,
-      clientName: clientData?.name || "—",
-      shiftName: shiftData?.name || null,
-      shiftTime: shiftData ? `${shiftData.startTime} - ${shiftData.endTime}` : null,
-      unitName: unitData?.name || null,
-      clientUnits: units,
-      functions: functionsWithAllocations,
-    };
-  }),
+    }),
 
   // ============ CRIAR PLANEJAMENTO ============
   create: protectedProcedure
-    .input(z.object({
-      date: z.string(),
-      shiftId: z.number().optional(),
-      clientId: z.number(),
-      clientUnitId: z.number().optional(),
-      leaderId: z.number().optional(),
-      notes: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        date: z.string(),
+        shiftId: z.number().optional(),
+        clientId: z.number(),
+        clientUnitId: z.number().optional(),
+        leaderId: z.number().optional(),
+        notes: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      await requirePermission(ctx.user.id, "schedules", "canCreate");
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canCreate"
+      );
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const result = await db.insert(workSchedules).values({
@@ -193,49 +305,91 @@ export const planejamentosRouter = router({
 
   // ============ ATUALIZAR PLANEJAMENTO ============
   update: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      date: z.string().optional(),
-      shiftId: z.number().nullable().optional(),
-      clientId: z.number().optional(),
-      clientUnitId: z.number().nullable().optional(),
-      leaderId: z.number().nullable().optional(),
-      status: z.enum(["pendente", "validado", "cancelado"]).optional(),
-      notes: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        id: z.number(),
+        date: z.string().optional(),
+        shiftId: z.number().nullable().optional(),
+        clientId: z.number().optional(),
+        clientUnitId: z.number().nullable().optional(),
+        leaderId: z.number().nullable().optional(),
+        status: z.enum(["pendente", "validado", "cancelado"]).optional(),
+        notes: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      await requirePermission(ctx.user.id, "schedules", "canEdit");
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canEdit"
+      );
+      const { db, schedule } = await getScheduleOrThrow(input.id);
       const { id, ...data } = input;
       const updateData: any = { ...data };
       if (data.date) updateData.date = new Date(data.date);
-      await db.update(workSchedules).set(updateData).where(eq(workSchedules.id, id));
+      if (data.status) {
+        assertScheduleTransition(schedule.status, data.status);
+      }
+      if (schedule.status === "cancelado" && data.status !== "cancelado") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Planejamento cancelado não pode ser reaberto",
+        });
+      }
+      await db
+        .update(workSchedules)
+        .set(updateData)
+        .where(eq(workSchedules.id, id));
       return { success: true };
     }),
 
   // ============ EXCLUIR PLANEJAMENTO ============
-  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
-    await requirePermission(ctx.user.id, "schedules", "canDelete");
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    // Excluir em cascata: alocações -> funções -> planejamento
-    await db.delete(scheduleAllocations).where(eq(scheduleAllocations.scheduleId, input));
-    await db.delete(scheduleFunctions).where(eq(scheduleFunctions.scheduleId, input));
-    await db.delete(workSchedules).where(eq(workSchedules.id, input));
-    return { success: true };
-  }),
+  delete: protectedProcedure
+    .input(z.number())
+    .mutation(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canDelete"
+      );
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Excluir em cascata: alocações -> funções -> planejamento
+      await db
+        .delete(scheduleAllocations)
+        .where(eq(scheduleAllocations.scheduleId, input));
+      await db
+        .delete(scheduleFunctions)
+        .where(eq(scheduleFunctions.scheduleId, input));
+      await db.delete(workSchedules).where(eq(workSchedules.id, input));
+      return { success: true };
+    }),
 
   // ============ DUPLICAR PLANEJAMENTO ============
   duplicate: protectedProcedure
     .input(z.object({ scheduleId: z.number(), newDate: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      await requirePermission(ctx.user.id, "schedules", "canCreate");
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canCreate"
+      );
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [original] = await db.select().from(workSchedules).where(eq(workSchedules.id, input.scheduleId)).limit(1);
-      if (!original) throw new TRPCError({ code: "NOT_FOUND", message: "Planejamento não encontrado" });
+      const [original] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input.scheduleId))
+        .limit(1);
+      if (!original)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Planejamento não encontrado",
+        });
 
       // Criar novo planejamento
       const newDate = input.newDate ? new Date(input.newDate) : original.date;
@@ -251,7 +405,10 @@ export const planejamentosRouter = router({
       const newScheduleId = Number(newSchedule.insertId);
 
       // Copiar funções
-      const funcs = await db.select().from(scheduleFunctions).where(eq(scheduleFunctions.scheduleId, input.scheduleId));
+      const funcs = await db
+        .select()
+        .from(scheduleFunctions)
+        .where(eq(scheduleFunctions.scheduleId, input.scheduleId));
       for (const f of funcs) {
         const [newFunc] = await db.insert(scheduleFunctions).values({
           scheduleId: newScheduleId,
@@ -262,8 +419,15 @@ export const planejamentosRouter = router({
         const newFuncId = Number(newFunc.insertId);
 
         // Copiar alocações da função
-        const allocs = await db.select().from(scheduleAllocations)
-          .where(and(eq(scheduleAllocations.scheduleFunctionId, f.id), eq(scheduleAllocations.scheduleId, input.scheduleId)));
+        const allocs = await db
+          .select()
+          .from(scheduleAllocations)
+          .where(
+            and(
+              eq(scheduleAllocations.scheduleFunctionId, f.id),
+              eq(scheduleAllocations.scheduleId, input.scheduleId)
+            )
+          );
         for (const a of allocs) {
           await db.insert(scheduleAllocations).values({
             scheduleFunctionId: newFuncId,
@@ -283,25 +447,42 @@ export const planejamentosRouter = router({
     }),
 
   // ============ VALIDAR PLANEJAMENTO ============
-  validate: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
-    await requirePermission(ctx.user.id, "schedules", "canEdit");
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(workSchedules).set({ status: "validado" }).where(eq(workSchedules.id, input));
-    return { success: true };
-  }),
+  validate: protectedProcedure
+    .input(z.number())
+    .mutation(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canEdit"
+      );
+      const { db, schedule } = await getScheduleOrThrow(input);
+      assertScheduleTransition(schedule.status, "validado");
+      await db
+        .update(workSchedules)
+        .set({ status: "validado" })
+        .where(eq(workSchedules.id, input));
+      return { success: true };
+    }),
 
   // ============ FUNÇÕES DO PLANEJAMENTO ============
   functions: router({
     add: protectedProcedure
-      .input(z.object({
-        scheduleId: z.number(),
-        jobFunctionId: z.number(),
-        payValue: z.string().optional(),
-        receiveValue: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          scheduleId: z.number(),
+          jobFunctionId: z.number(),
+          payValue: z.string().optional(),
+          receiveValue: z.string().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -309,7 +490,11 @@ export const planejamentosRouter = router({
         let pay = input.payValue || "0";
         let recv = input.receiveValue || "0";
         if (!input.payValue || !input.receiveValue) {
-          const [jf] = await db.select().from(jobFunctions).where(eq(jobFunctions.id, input.jobFunctionId)).limit(1);
+          const [jf] = await db
+            .select()
+            .from(jobFunctions)
+            .where(eq(jobFunctions.id, input.jobFunctionId))
+            .limit(1);
           if (jf) {
             pay = input.payValue || String(jf.defaultPayValue || "0");
             recv = input.receiveValue || String(jf.defaultReceiveValue || "0");
@@ -326,17 +511,27 @@ export const planejamentosRouter = router({
       }),
 
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        payValue: z.string().optional(),
-        receiveValue: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          id: z.number(),
+          payValue: z.string().optional(),
+          receiveValue: z.string().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         const { id, ...data } = input;
-        await db.update(scheduleFunctions).set(data).where(eq(scheduleFunctions.id, id));
+        await db
+          .update(scheduleFunctions)
+          .set(data)
+          .where(eq(scheduleFunctions.id, id));
 
         // Atualizar valores de todas as alocações desta função que não foram pagas
         if (data.payValue || data.receiveValue) {
@@ -344,17 +539,26 @@ export const planejamentosRouter = router({
           if (data.payValue) updateAlloc.payValue = data.payValue;
           if (data.receiveValue) updateAlloc.receiveValue = data.receiveValue;
           // Só atualiza alocações não pagas (paymentBatchId IS NULL)
-          const allocs = await db.select().from(scheduleAllocations)
+          const allocs = await db
+            .select()
+            .from(scheduleAllocations)
             .where(eq(scheduleAllocations.scheduleFunctionId, id));
           for (const a of allocs) {
             if (!a.paymentBatchId) {
-              await db.update(scheduleAllocations).set(updateAlloc).where(eq(scheduleAllocations.id, a.id));
+              await db
+                .update(scheduleAllocations)
+                .set(updateAlloc)
+                .where(eq(scheduleAllocations.id, a.id));
             }
           }
         }
 
         // Recalcular totais
-        const [func] = await db.select().from(scheduleFunctions).where(eq(scheduleFunctions.id, id)).limit(1);
+        const [func] = await db
+          .select()
+          .from(scheduleFunctions)
+          .where(eq(scheduleFunctions.id, id))
+          .limit(1);
         if (func) await recalcScheduleTotals(func.scheduleId);
         return { success: true };
       }),
@@ -362,12 +566,21 @@ export const planejamentosRouter = router({
     remove: protectedProcedure
       .input(z.object({ id: z.number(), scheduleId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         // Excluir alocações da função primeiro
-        await db.delete(scheduleAllocations).where(eq(scheduleAllocations.scheduleFunctionId, input.id));
-        await db.delete(scheduleFunctions).where(eq(scheduleFunctions.id, input.id));
+        await db
+          .delete(scheduleAllocations)
+          .where(eq(scheduleAllocations.scheduleFunctionId, input.id));
+        await db
+          .delete(scheduleFunctions)
+          .where(eq(scheduleFunctions.id, input.id));
         await recalcScheduleTotals(input.scheduleId);
         return { success: true };
       }),
@@ -377,31 +590,52 @@ export const planejamentosRouter = router({
   allocations: router({
     // Alocar múltiplos funcionários de uma vez
     addBatch: protectedProcedure
-      .input(z.object({
-        scheduleFunctionId: z.number(),
-        scheduleId: z.number(),
-        employeeIds: z.array(z.number()),
-      }))
+      .input(
+        z.object({
+          scheduleFunctionId: z.number(),
+          scheduleId: z.number(),
+          employeeIds: z.array(z.number()),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [schedule] = await db
+          .select()
+          .from(workSchedules)
+          .where(eq(workSchedules.id, input.scheduleId))
+          .limit(1);
+        if (!schedule)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Planejamento não encontrado",
+          });
+        assertScheduleEditable(schedule.status);
 
         // Buscar valores padrão da função
-        const [func] = await db.select().from(scheduleFunctions)
-          .where(eq(scheduleFunctions.id, input.scheduleFunctionId)).limit(1);
+        const [func] = await db
+          .select()
+          .from(scheduleFunctions)
+          .where(eq(scheduleFunctions.id, input.scheduleFunctionId))
+          .limit(1);
         const payVal = func?.payValue || "0";
         const recvVal = func?.receiveValue || "0";
 
         // Buscar alocações existentes para evitar duplicatas
-        const existing = await db.select().from(scheduleAllocations)
-          .where(and(
-            eq(scheduleAllocations.scheduleFunctionId, input.scheduleFunctionId),
-            eq(scheduleAllocations.scheduleId, input.scheduleId),
-          ));
-        const existingEmpIds = new Set(existing.map(e => e.employeeId));
-
-        const newEmpIds = input.employeeIds.filter(id => !existingEmpIds.has(id));
+        const existing = await db
+          .select()
+          .from(scheduleAllocations)
+          .where(and(eq(scheduleAllocations.scheduleId, input.scheduleId)));
+        const newEmpIds = filterNewEmployeesWithoutDuplicate(
+          input.employeeIds,
+          existing.map(e => e.employeeId)
+        );
         for (const empId of newEmpIds) {
           await db.insert(scheduleAllocations).values({
             scheduleFunctionId: input.scheduleFunctionId,
@@ -421,30 +655,60 @@ export const planejamentosRouter = router({
 
     // Atualizar valores individuais de um funcionário
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        scheduleId: z.number(),
-        payValue: z.string().optional(),
-        receiveValue: z.string().optional(),
-        mealAllowance: z.string().optional(),
-        voucher: z.string().optional(),
-        bonus: z.string().optional(),
-        attendanceStatus: z.enum(["presente", "faltou", "parcial"]).optional(),
-        allocNotes: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          id: z.number(),
+          scheduleId: z.number(),
+          payValue: z.string().optional(),
+          receiveValue: z.string().optional(),
+          mealAllowance: z.string().optional(),
+          voucher: z.string().optional(),
+          bonus: z.string().optional(),
+          attendanceStatus: z
+            .enum(["presente", "faltou", "parcial"])
+            .optional(),
+          allocNotes: z.string().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [schedule] = await db
+          .select()
+          .from(workSchedules)
+          .where(eq(workSchedules.id, input.scheduleId))
+          .limit(1);
+        if (!schedule)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Planejamento não encontrado",
+          });
+        assertScheduleEditable(schedule.status);
 
         // Verificar se não está pago
-        const [alloc] = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.id, input.id)).limit(1);
+        const [alloc] = await db
+          .select()
+          .from(scheduleAllocations)
+          .where(eq(scheduleAllocations.id, input.id))
+          .limit(1);
         if (alloc?.paymentBatchId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível alterar alocação já paga em lote" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não é possível alterar alocação já paga em lote",
+          });
         }
 
         const { id, scheduleId, ...data } = input;
-        await db.update(scheduleAllocations).set(data).where(eq(scheduleAllocations.id, id));
+        await db
+          .update(scheduleAllocations)
+          .set(data)
+          .where(eq(scheduleAllocations.id, id));
         await recalcScheduleTotals(scheduleId);
         return { success: true };
       }),
@@ -453,16 +717,41 @@ export const planejamentosRouter = router({
     remove: protectedProcedure
       .input(z.object({ id: z.number(), scheduleId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await requirePermission(ctx.user.id, "schedules", "canEdit");
+        await requirePermission(
+          ctx.user.id,
+          ctx.user.role,
+          "schedules",
+          "canEdit"
+        );
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [schedule] = await db
+          .select()
+          .from(workSchedules)
+          .where(eq(workSchedules.id, input.scheduleId))
+          .limit(1);
+        if (!schedule)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Planejamento não encontrado",
+          });
+        assertScheduleEditable(schedule.status);
 
-        const [alloc] = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.id, input.id)).limit(1);
+        const [alloc] = await db
+          .select()
+          .from(scheduleAllocations)
+          .where(eq(scheduleAllocations.id, input.id))
+          .limit(1);
         if (alloc?.paymentBatchId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível remover alocação já paga em lote" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não é possível remover alocação já paga em lote",
+          });
         }
 
-        await db.delete(scheduleAllocations).where(eq(scheduleAllocations.id, input.id));
+        await db
+          .delete(scheduleAllocations)
+          .where(eq(scheduleAllocations.id, input.id));
         await recalcScheduleTotals(input.scheduleId);
         return { success: true };
       }),
@@ -483,7 +772,8 @@ export const planejamentosRouter = router({
   // ============ DADOS AUXILIARES PARA FORMULÁRIOS ============
   formData: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) return { clients: [], shifts: [], jobFunctions: [], employees: [] };
+    if (!db)
+      return { clients: [], shifts: [], jobFunctions: [], employees: [] };
     const [c, s, jf, e] = await Promise.all([
       db.select().from(clients).where(eq(clients.isActive, true)),
       db.select().from(shifts).where(eq(shifts.isActive, true)),
@@ -494,35 +784,70 @@ export const planejamentosRouter = router({
   }),
 
   // Unidades por cliente
-  unitsByClient: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-    const db = await getDb();
-    if (!db) return [];
-    return db.select().from(clientUnits).where(and(eq(clientUnits.clientId, input), eq(clientUnits.isActive, true)));
-  }),
+  unitsByClient: protectedProcedure
+    .input(z.number())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(clientUnits)
+        .where(
+          and(eq(clientUnits.clientId, input), eq(clientUnits.isActive, true))
+        );
+    }),
 
   // ============ MELHORIAS V2 ============
 
   // Lançamento rápido de Vale/Bônus/Marmita por CPF + Data
   quickAddAllowance: protectedProcedure
-    .input(z.object({
-      cpf: z.string(),
-      date: z.string(),
-      type: z.enum(["voucher", "bonus", "mealAllowance"]),
-      value: z.string(),
-    }))
+    .input(
+      z.object({
+        cpf: z.string(),
+        date: z.string(),
+        type: z.enum(["voucher", "bonus", "mealAllowance"]),
+        value: z.string(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      await requirePermission(ctx.user.id, "schedules", "canEdit");
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canEdit"
+      );
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [emp] = await db.select().from(employees).where(eq(employees.cpf, input.cpf)).limit(1);
+      const [emp] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.cpf, input.cpf))
+        .limit(1);
       if (!emp) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário com este CPF não encontrado" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Funcionário com este CPF não encontrado",
+        });
       }
 
       const targetDate = new Date(input.date);
-      const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-      const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+      const dayStart = new Date(
+        targetDate.getFullYear(),
+        targetDate.getMonth(),
+        targetDate.getDate(),
+        0,
+        0,
+        0
+      );
+      const dayEnd = new Date(
+        targetDate.getFullYear(),
+        targetDate.getMonth(),
+        targetDate.getDate(),
+        23,
+        59,
+        59
+      );
 
       const allSchedules = await db.select().from(workSchedules);
       const [schedule] = allSchedules.filter(s => {
@@ -531,54 +856,92 @@ export const planejamentosRouter = router({
       });
 
       if (!schedule) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Nenhum planejamento encontrado para esta data" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Nenhum planejamento encontrado para esta data",
+        });
       }
 
-      const [alloc] = await db.select().from(scheduleAllocations)
-        .where(and(
-          eq(scheduleAllocations.scheduleId, schedule.id),
-          eq(scheduleAllocations.employeeId, emp.id),
-        ));
+      const [alloc] = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(
+          and(
+            eq(scheduleAllocations.scheduleId, schedule.id),
+            eq(scheduleAllocations.employeeId, emp.id)
+          )
+        );
 
       if (!alloc) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não está alocado neste planejamento" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Funcionário não está alocado neste planejamento",
+        });
       }
 
       const updateData: any = {};
       updateData[input.type] = input.value;
-      await db.update(scheduleAllocations).set(updateData).where(eq(scheduleAllocations.id, alloc.id));
+      await db
+        .update(scheduleAllocations)
+        .set(updateData)
+        .where(eq(scheduleAllocations.id, alloc.id));
       await recalcScheduleTotals(schedule.id);
 
       return { success: true, message: `${input.type} lançado com sucesso` };
     }),
 
   // Resumo expandível de um planejamento
-  getSummary: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-    await requirePermission(ctx.user.id, "schedules", "canView");
-    const db = await getDb();
-    if (!db) return null;
+  getSummary: protectedProcedure
+    .input(z.number())
+    .query(async ({ ctx, input }) => {
+      await requirePermission(
+        ctx.user.id,
+        ctx.user.role,
+        "schedules",
+        "canView"
+      );
+      const db = await getDb();
+      if (!db) return null;
 
-    const [schedule] = await db.select().from(workSchedules).where(eq(workSchedules.id, input)).limit(1);
-    if (!schedule) return null;
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input))
+        .limit(1);
+      if (!schedule) return null;
 
-    const allocs = await db.select().from(scheduleAllocations).where(eq(scheduleAllocations.scheduleId, input));
-    const empMap = Object.fromEntries((await db.select().from(employees)).map(e => [e.id, e]));
+      const allocs = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.scheduleId, input));
+      const empMap = Object.fromEntries(
+        (await db.select().from(employees)).map(e => [e.id, e])
+      );
 
-    const totalMealAllowance = allocs.reduce((sum, a) => sum + parseFloat(String(a.mealAllowance || "0")), 0);
-    const totalVoucher = allocs.reduce((sum, a) => sum + parseFloat(String(a.voucher || "0")), 0);
-    const totalBonus = allocs.reduce((sum, a) => sum + parseFloat(String(a.bonus || "0")), 0);
+      const totalMealAllowance = allocs.reduce(
+        (sum, a) => sum + parseFloat(String(a.mealAllowance || "0")),
+        0
+      );
+      const totalVoucher = allocs.reduce(
+        (sum, a) => sum + parseFloat(String(a.voucher || "0")),
+        0
+      );
+      const totalBonus = allocs.reduce(
+        (sum, a) => sum + parseFloat(String(a.bonus || "0")),
+        0
+      );
 
-    return {
-      ...schedule,
-      totalPeople: allocs.length,
-      totalMealAllowance: totalMealAllowance.toFixed(2),
-      totalVoucher: totalVoucher.toFixed(2),
-      totalBonus: totalBonus.toFixed(2),
-      allocations: allocs.map(a => ({
-        ...a,
-        employeeName: empMap[a.employeeId]?.name || "—",
-        employeeCpf: empMap[a.employeeId]?.cpf || "",
-      })),
-    };
-  }),
+      return {
+        ...schedule,
+        totalPeople: allocs.length,
+        totalMealAllowance: totalMealAllowance.toFixed(2),
+        totalVoucher: totalVoucher.toFixed(2),
+        totalBonus: totalBonus.toFixed(2),
+        allocations: allocs.map(a => ({
+          ...a,
+          employeeName: empMap[a.employeeId]?.name || "—",
+          employeeCpf: empMap[a.employeeId]?.cpf || "",
+        })),
+      };
+    }),
 });

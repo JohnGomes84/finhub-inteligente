@@ -8,6 +8,14 @@ import { registerExportRoutes } from "../routers/exportRoutes";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import {
+  createRateLimitMiddleware,
+  healthHandler,
+  metricsHandler,
+  readinessHandler,
+  requestLogger,
+  withCorrelationId,
+} from "./observability";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -31,6 +39,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  const rateLimit = createRateLimitMiddleware();
+  app.set("trust proxy", 1);
+  app.use(withCorrelationId);
+  app.use(requestLogger);
+  app.get("/health", healthHandler);
+  app.get("/ready", readinessHandler);
+  app.get("/metrics", metricsHandler);
+  app.use("/api", rateLimit);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -54,14 +70,18 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
+  const host = process.env.SERVER_HOST || "0.0.0.0";
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, host, () => {
+    const baseUrl =
+      process.env.PUBLIC_BASE_URL ||
+      (host === "0.0.0.0" || host === "::" ? `http://localhost:${port}` : `http://${host}:${port}`);
+    console.log(`Server running on ${baseUrl}/`);
   });
 }
 
