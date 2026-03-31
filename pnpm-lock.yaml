@@ -261,7 +261,7 @@ importers:
         specifier: ^0.25.0
         version: 0.25.10
       pnpm:
-        specifier: ^10.15.1
+        specifier: ^10.4.1
         version: 10.18.0
       postcss:
         specifier: ^8.4.47
