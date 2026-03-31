@@ -1,6 +1,7 @@
-import { z } from "zod";
+
 import { protectedProcedure, router } from "../_core/trpc";
 import { eq, like, and, desc, sql } from "drizzle-orm";
+import { z } from "zod";
 import { getDb } from "../db";
 import {
   employees,
@@ -15,6 +16,7 @@ import {
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "../controle/permissionControl";
+import { validatePixKey } from "../controle/pixValidator";
 import type { SystemModule } from "../../drizzle/schema";
 
 // Helper para verificar permissão
@@ -121,6 +123,16 @@ export const cadastrosRouter = router({
           "employees",
           "canCreate"
         );
+        // Validar PIX se fornecido
+        if (input.pixKey) {
+          const pixValidation = validatePixKey(input.pixKey);
+          if (!pixValidation.valid) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Chave PIX inválida: ${pixValidation.message}`,
+            });
+          }
+        }
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         const result = await db.insert(employees).values({
@@ -158,6 +170,16 @@ export const cadastrosRouter = router({
           "employees",
           "canEdit"
         );
+        // Validar PIX se fornecido
+        if (input.pixKey) {
+          const pixValidation = validatePixKey(input.pixKey);
+          if (!pixValidation.valid) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Chave PIX inválida: ${pixValidation.message}`,
+            });
+          }
+        }
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         const { id, ...data } = input;

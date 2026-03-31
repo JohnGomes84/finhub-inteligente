@@ -131,3 +131,9 @@
 - [ ] Ajustar lógica: líder é papel separado, não precisa estar em schedule_allocations
 - [ ] Líder pode ser: do dia (alocado) ou fixo (só supervisiona, não trabalha)
 - [ ] Planejamentos podem não ter líder (leaderId nullable)
+
+## Validação Bancária PIX
+- [x] Criar validador PIX robusto (formato, dígitos, instituição, tipo de chave)
+- [x] Integrar validação em endpoints de cadastro e alteração de PIX
+- [x] Feedback visual de validação no frontend (status, alertas)
+- [x] Testes de validação PIX (22 testes passando)

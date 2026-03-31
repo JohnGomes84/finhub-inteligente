@@ -1,7 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import CrudPage, { type FieldDef } from "@/components/CrudPage";
-import { Users } from "lucide-react";
+import { Users, CheckCircle, AlertCircle } from "lucide-react";
+import { useState } from "react";
 
 const fields: FieldDef[] = [
   { key: "name", label: "Nome", required: true },
@@ -9,7 +10,7 @@ const fields: FieldDef[] = [
   { key: "email", label: "E-mail", type: "email" },
   { key: "phone", label: "Telefone" },
   { key: "city", label: "Cidade" },
-  { key: "pixKey", label: "Chave PIX" },
+  { key: "pixKey", label: "Chave PIX", placeholder: "CPF, CNPJ, Email, Telefone ou UUID" },
   { key: "pixKeyType", label: "Tipo PIX", type: "select", showInTable: false, options: [
     { value: "cpf", label: "CPF" },
     { value: "email", label: "E-mail" },
@@ -38,6 +39,7 @@ export default function EmployeesPage() {
   const updateMut = trpc.cadastros.employees.update.useMutation({ onSuccess: () => utils.cadastros.employees.list.invalidate() });
   const deleteMut = trpc.cadastros.employees.delete.useMutation({ onSuccess: () => utils.cadastros.employees.list.invalidate() });
 
+
   return (
     <CrudPage
       title="Funcionários"
@@ -53,6 +55,7 @@ export default function EmployeesPage() {
       onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
       onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
       searchPlaceholder="Buscar por nome, CPF ou cidade..."
+
     />
   );
 }
