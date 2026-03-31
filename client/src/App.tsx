@@ -20,9 +20,7 @@ import PaymentBatchesPage from "./pages/PaymentBatches";
 import UsersPage from "./pages/Users";
 import AnalyticsPage from "./pages/Analytics";
 import SchedulesPage from "./pages/Schedules";
-import LeaderPortal from "./pages/LeaderPortal";
-import LeaderScheduleDetail from "./pages/LeaderScheduleDetail";
-import PixRequests from "./pages/PixRequests";
+import PortalLiderPage from "./pages/PortalLider";
 
 function Router() {
   return (
@@ -70,14 +68,8 @@ function Router() {
       <Route path="/schedules">
         <DashboardLayout><SchedulesPage /></DashboardLayout>
       </Route>
-      <Route path="/leader-portal">
-        <DashboardLayout><LeaderPortal /></DashboardLayout>
-      </Route>
-      <Route path="/leader-schedule/:scheduleId">
-        <DashboardLayout><LeaderScheduleDetail /></DashboardLayout>
-      </Route>
-      <Route path="/pix-requests">
-        <DashboardLayout><PixRequests /></DashboardLayout>
+      <Route path="/portal-lider">
+        <PortalLiderPage />
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
