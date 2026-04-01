@@ -573,6 +573,16 @@ function AllocateModal({ scheduleFunctionId, scheduleId, employees, onClose }: {
       toast.success(`${data.added} funcionário(s) alocado(s)!`);
       onClose();
     },
+    onError: (error) => {
+      // Tratamento específico para erro de duplicidade
+      if (error.data?.code === "CONFLICT") {
+        toast.error(error.message || "Funcionário já alocado em outro planejamento nesta data");
+      } else if (error.data?.code === "BAD_REQUEST") {
+        toast.error(error.message || "Erro ao alocar funcionários");
+      } else {
+        toast.error("Erro ao alocar funcionários. Tente novamente.");
+      }
+    },
   });
 
   const filtered = useMemo(() => {
@@ -592,7 +602,7 @@ function AllocateModal({ scheduleFunctionId, scheduleId, employees, onClose }: {
       <DialogContent className="max-w-lg max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Alocar Funcionários</DialogTitle>
-          <p className="text-sm text-muted-foreground">Busque e clique nos funcionários para adicioná-los.</p>
+          <p className="text-sm text-muted-foreground">Busque e clique nos funcionários para adicioná-los. ⚠️ Funcionários não podem ser alocados em múltiplos planejamentos no mesmo dia.</p>
         </DialogHeader>
 
         <div className="relative">

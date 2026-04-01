@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, inArray, ne } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   workSchedules,
@@ -425,7 +425,7 @@ export const planejamentosRouter = router({
           .where(
             and(
               eq(scheduleAllocations.scheduleFunctionId, f.id),
-              eq(scheduleAllocations.scheduleId, input.scheduleId)
+              ne(workSchedules.id, input.scheduleId)
             )
           );
         for (const a of allocs) {
@@ -632,10 +632,50 @@ export const planejamentosRouter = router({
           .select()
           .from(scheduleAllocations)
           .where(and(eq(scheduleAllocations.scheduleId, input.scheduleId)));
+        // 1. Prevenir alocação do mesmo funcionário em diferentes planejamentos no mesmo dia
+        const scheduleDate = schedule.date; // Data do planejamento atual
+
+        const existingAllocationsOnSameDate = await db
+          .select({ employeeId: scheduleAllocations.employeeId, scheduleId: scheduleAllocations.scheduleId })
+          .from(scheduleAllocations)
+          .innerJoin(workSchedules, eq(scheduleAllocations.scheduleId, workSchedules.id))
+          .where(and(
+            eq(workSchedules.date, scheduleDate),
+            inArray(scheduleAllocations.employeeId, input.employeeIds),
+            // Excluir alocações do planejamento atual para não considerar como duplicidade consigo mesmo
+            // e permitir adicionar múltiplos funcionários a diferentes funções no mesmo planejamento
+            ne(workSchedules.id, input.scheduleId)
+          ));
+
+        const conflictingEmployees = existingAllocationsOnSameDate;
+
+        if (conflictingEmployees.length > 0) {
+          const conflictingEmployeeIds = [...new Set(conflictingEmployees.map(c => c.employeeId))];
+          const conflictingEmployeeNames = (await db.select({ name: employees.name }).from(employees).where(inArray(employees.id, conflictingEmployeeIds))).map(e => e.name);
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Os funcionários ${conflictingEmployeeNames.join(", ")} já estão alocados em outro planejamento na data ${scheduleDate.toISOString().split('T')[0]}.`,
+          });
+        }
+
+        // 2. Prevenir alocação do mesmo funcionário na mesma função do mesmo planejamento
+        const existingAllocationsInThisSchedule = await db
+          .select()
+          .from(scheduleAllocations)
+          .where(eq(scheduleAllocations.scheduleId, input.scheduleId));
+
         const newEmpIds = filterNewEmployeesWithoutDuplicate(
           input.employeeIds,
-          existing.map(e => e.employeeId)
+          existingAllocationsInThisSchedule.map(e => e.employeeId)
         );
+
+        if (newEmpIds.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Todos os funcionários selecionados já estão alocados neste planejamento ou em outro na mesma data.",
+          });
+        }
+
         for (const empId of newEmpIds) {
           await db.insert(scheduleAllocations).values({
             scheduleFunctionId: input.scheduleFunctionId,
