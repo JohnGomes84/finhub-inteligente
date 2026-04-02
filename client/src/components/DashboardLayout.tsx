@@ -54,7 +54,7 @@ const allMenuItems: MenuItem[] = [
   { icon: Landmark, label: "Contas Bancárias", path: "/bank-accounts", module: "bank_accounts", group: "Cadastros" },
   { icon: CalendarDays, label: "Planejamentos", path: "/schedules", module: "schedules", group: "Operações" },
   { icon: UserCheck, label: "Portal do Líder", path: "/leader-portal", module: "schedules", group: "Operações" },
-  { icon: Key, label: "Solicitações PIX", path: "/pix-requests", module: "users", group: "Admin" },
+  { icon: Key, label: "Aprovação PIX", path: "/pix-approvals", module: "users", group: "Admin" },
   { icon: CreditCard, label: "Contas a Pagar", path: "/accounts-payable", module: "accounts_payable", group: "Financeiro" },
   { icon: Receipt, label: "Contas a Receber", path: "/accounts-receivable", module: "accounts_receivable", group: "Financeiro" },
   { icon: Wallet, label: "Lotes de Pagamento", path: "/payment-batches", module: "payment_batches", group: "Financeiro" },

@@ -21,6 +21,7 @@ import UsersPage from "./pages/Users";
 import AnalyticsPage from "./pages/Analytics";
 import SchedulesPage from "./pages/Schedules";
 import PortalLiderPage from "./pages/PortalLider";
+import PixApprovalsPage from "./pages/PixApprovals";
 
 function Router() {
   return (
@@ -70,6 +71,9 @@ function Router() {
       </Route>
       <Route path="/portal-lider">
         <PortalLiderPage />
+      </Route>
+      <Route path="/pix-approvals">
+        <DashboardLayout><PixApprovalsPage /></DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

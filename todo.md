@@ -162,3 +162,13 @@
 - [x] Integrar gráficos no Analytics
 - [x] KPIs em tempo real (Receita, Despesa, Saldo, Margem)
 - [ ] Testes de renderização dos gráficos
+
+## Fase 11: Tela Admin para Aprovação de Solicitações PIX
+- [x] Analisar endpoints de PIX no backend (listar, aprovar, rejeitar)
+- [x] Criar página PixApprovals.tsx com abas (Pendentes/Histórico)
+- [x] Implementar filtros (CPF, nome, data)
+- [x] Formulário de aprovação com confirmação
+- [x] Formulário de rejeição com motivo obrigatório
+- [x] Integração com backend (reviewPixRequest)
+- [x] Auditoria: registrar quem aprovou/rejeitou e quando
+- [ ] Testes de aprovação/rejeição
