@@ -137,3 +137,28 @@
 - [x] Integrar validação em endpoints de cadastro e alteração de PIX
 - [x] Feedback visual de validação no frontend (status, alertas)
 - [x] Testes de validação PIX (22 testes passando)
+
+## Fase 8: Sincronização de Dependências
+- [x] Sincronizar pnpm-lock.yaml com package.json (resolver ^10.4.1 vs ^10.15.1)
+- [x] Validar build sem erros
+- [x] Testar deploy
+
+## Fase 9: Frontend Portal do Líder (MVP Mobile-First)
+- [x] Criar página PortalLider.tsx com layout mobile-first
+- [x] Abas: Minhas Escalas / Presença / Cadastro Rápido / Lançamentos
+- [x] Listar escalas do líder com filtros (data, status)
+- [x] Implementar check-in/out com timestamp
+- [x] Formulário cadastro rápido (nome, CPF, RG, PIX, fotos documento)
+- [x] Upload de fotos via câmera ou galeria
+- [x] Solicitação de alteração PIX com fluxo de aprovação
+- [ ] Tela admin para aprovar/rejeitar PIX
+- [ ] Testes de integração do Portal
+
+## Fase 10: Gráficos de Dashboard com Recharts
+- [x] Instalar recharts
+- [x] Gráfico Evolução Financeira Mensal (receita vs custos)
+- [x] Gráfico Composição de Despesas por categoria/cliente
+- [x] Gráfico Despesas por Cliente com comparativo
+- [x] Integrar gráficos no Analytics
+- [x] KPIs em tempo real (Receita, Despesa, Saldo, Margem)
+- [ ] Testes de renderização dos gráficos
