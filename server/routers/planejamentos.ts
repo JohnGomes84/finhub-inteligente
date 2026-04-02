@@ -650,7 +650,7 @@ export const planejamentosRouter = router({
         const conflictingEmployees = existingAllocationsOnSameDate;
 
         if (conflictingEmployees.length > 0) {
-          const conflictingEmployeeIds = [...new Set(conflictingEmployees.map(c => c.employeeId))];
+          const conflictingEmployeeIds = Array.from(new Set(conflictingEmployees.map(c => c.employeeId)));
           const conflictingEmployeeNames = (await db.select({ name: employees.name }).from(employees).where(inArray(employees.id, conflictingEmployeeIds))).map(e => e.name);
           throw new TRPCError({
             code: "CONFLICT",
