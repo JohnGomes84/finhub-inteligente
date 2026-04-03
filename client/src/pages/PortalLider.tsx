@@ -28,7 +28,6 @@ export default function PortalLiderPage() {
   const [quickRegName, setQuickRegName] = useState("");
   const [quickRegCpf, setQuickRegCpf] = useState("");
   const [quickRegRg, setQuickRegRg] = useState("");
-  const [quickRegPhone, setQuickRegPhone] = useState("");
   const [quickRegPix, setQuickRegPix] = useState("");
   const [quickRegPixType, setQuickRegPixType] = useState<"cpf" | "email" | "phone" | "random" | "cnpj">("cpf");
   const [docFrontBase64, setDocFrontBase64] = useState<string | null>(null);
@@ -85,11 +84,10 @@ export default function PortalLiderPage() {
 
   const quickRegisterMut = trpc.portalLider.quickRegisterEmployee.useMutation({
     onSuccess: () => {
-      toast.success("Funcionário cadastrado!");
+      toast.success("Funcionario cadastrado!");
       setQuickRegName("");
       setQuickRegCpf("");
       setQuickRegRg("");
-      setQuickRegPhone("");
       setQuickRegPix("");
       setDocFrontBase64(null);
       setDocBackBase64(null);
@@ -132,6 +130,7 @@ export default function PortalLiderPage() {
       scheduleId: selectedScheduleId,
       status,
       notes: "",
+      partialHours: hours ? parseFloat(hours) : undefined,
     });
   };
 
@@ -172,7 +171,7 @@ export default function PortalLiderPage() {
       return;
     }
     await requestPixChangeMut.mutateAsync({
-      employeeId: 1,
+      cpf: pixChangeCpf,
       newPixKey,
     });
   };

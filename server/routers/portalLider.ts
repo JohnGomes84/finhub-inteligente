@@ -92,12 +92,25 @@ export const portalLiderRouter = router({
       let schedules = await query;
 
       // Filtros por data
-      if (input?.dateStart) {
-        const ds = new Date(input.dateStart);
+      let dateStart = input?.dateStart;
+      let dateEnd = input?.dateEnd;
+
+      // Se nao houver filtros, padrao e hoje
+      if (!dateStart && !dateEnd) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dateStart = today.toISOString();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        dateEnd = tomorrow.toISOString();
+      }
+
+      if (dateStart) {
+        const ds = new Date(dateStart);
         schedules = schedules.filter(s => new Date(s.date) >= ds);
       }
-      if (input?.dateEnd) {
-        const de = new Date(input.dateEnd);
+      if (dateEnd) {
+        const de = new Date(dateEnd);
         de.setHours(23, 59, 59);
         schedules = schedules.filter(s => new Date(s.date) <= de);
       }
@@ -233,6 +246,7 @@ export const portalLiderRouter = router({
         scheduleId: z.number(),
         status: z.enum(["presente", "faltou", "parcial"]),
         notes: z.string().optional(),
+        partialHours: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -247,11 +261,61 @@ export const portalLiderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Buscar alocação e turno para calcular valor proporcional
+      const [alloc] = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.id, input.allocationId))
+        .limit(1);
+      if (!alloc) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Alocação não encontrada",
+        });
+      }
+
+      // Buscar o planejamento para obter o turno
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input.scheduleId))
+        .limit(1);
+      if (!schedule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Planejamento não encontrado",
+        });
+      }
+
+      // Buscar turno para calcular horas totais
+      let totalShiftHours = 8; // padrão
+      if (schedule.shiftId) {
+        const [shift] = await db
+          .select()
+          .from(shifts)
+          .where(eq(shifts.id, schedule.shiftId))
+          .limit(1);
+        if (shift && shift.startTime && shift.endTime) {
+          // Calcular diferença em horas
+          const start = new Date(`2000-01-01 ${shift.startTime}`);
+          const end = new Date(`2000-01-01 ${shift.endTime}`);
+          totalShiftHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        }
+      }
+
+      // Calcular valor proporcional se presença parcial
+      let partialPayValue = alloc.payValue;
+      if (input.status === "parcial" && input.partialHours) {
+        const payValueNum = parseFloat(String(alloc.payValue || 0));
+        partialPayValue = (payValueNum * input.partialHours) / totalShiftHours;
+      }
+
       await db
         .update(scheduleAllocations)
         .set({
           attendanceStatus: input.status,
           allocNotes: input.notes || null,
+          payValue: input.status === "parcial" && input.partialHours ? partialPayValue : alloc.payValue,
         })
         .where(eq(scheduleAllocations.id, input.allocationId));
 
@@ -336,11 +400,12 @@ export const portalLiderRouter = router({
       return { id: Number(result[0].insertId), name: input.name };
     }),
 
-  // ============ SOLICITAR ALTERAÇÃO DE PIX ============
+  // ============ SOLICITAR ALTERACAO DE PIX ============
   requestPixChange: protectedProcedure
     .input(
       z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(),
+        cpf: z.string().optional(),
         newPixKey: z.string(),
         reason: z.string().optional(),
       })
@@ -349,16 +414,28 @@ export const portalLiderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Buscar funcionário
-      const [emp] = await db
-        .select()
-        .from(employees)
-        .where(eq(employees.id, input.employeeId))
-        .limit(1);
+      // Buscar funcionario por ID ou CPF
+      let emp;
+      if (input.employeeId) {
+        const result = await db
+          .select()
+          .from(employees)
+          .where(eq(employees.id, input.employeeId))
+          .limit(1);
+        emp = result[0];
+      } else if (input.cpf) {
+        const result = await db
+          .select()
+          .from(employees)
+          .where(eq(employees.cpf, input.cpf))
+          .limit(1);
+        emp = result[0];
+      }
+
       if (!emp) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Funcionário não encontrado",
+          message: "Funcionario nao encontrado",
         });
       }
       const existingPending = await db
@@ -431,6 +508,8 @@ export const portalLiderRouter = router({
         ...r,
         employeeName: empMap[r.employeeId]?.name || "—",
         employeeCpf: empMap[r.employeeId]?.cpf || "",
+        currentPixKey: empMap[r.employeeId]?.pixKey || "",
+        pixKeyType: empMap[r.employeeId]?.pixKeyType || "",
       }));
     }),
 
