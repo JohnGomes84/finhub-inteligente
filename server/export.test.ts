@@ -51,11 +51,13 @@ describe("Export Routes Registration", () => {
 
     registerExportRoutes(mockApp);
 
-    expect(mockApp.get).toHaveBeenCalledTimes(4);
+    expect(mockApp.get).toHaveBeenCalledTimes(6); // 4 reports + 2 PIX export
     expect(routes).toContain("/api/reports/payable/excel");
     expect(routes).toContain("/api/reports/payable/pdf");
     expect(routes).toContain("/api/reports/receivable/excel");
     expect(routes).toContain("/api/reports/receivable/pdf");
+    expect(routes).toContain("/api/export/pix-history/excel");
+    expect(routes).toContain("/api/export/pix-history/pdf");
   });
 });
 

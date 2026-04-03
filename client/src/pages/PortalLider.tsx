@@ -1,6 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock, Users, FileText, AlertCircle, Loader2, Plus, Save, Camera, Upload } from "lucide-react";
+import { Clock, Users, FileText, AlertCircle, Loader2, Plus, Save, Camera, X } from "lucide-react";
 import { toast } from "sonner";
 
 const BRL = (v: string | number | null) =>
@@ -18,22 +17,18 @@ const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 const fmtTime = (d: any) => d ? new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
 
 export default function PortalLiderPage() {
-
   const utils = trpc.useUtils();
 
+  // Estado da página
+  const [activeTab, setActiveTab] = useState("hoje");
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState("meus-planejamentos");
-  const [quickVoucherCpf, setQuickVoucherCpf] = useState("");
-  const [quickVoucherValue, setQuickVoucherValue] = useState("");
-  const [pixChangeOpen, setPixChangeOpen] = useState(false);
-  const [newPixKey, setNewPixKey] = useState("");
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notes, setNotes] = useState("");
+  const [partialHours, setPartialHours] = useState<{ [key: number]: string }>({});
 
   // Cadastro Rápido
   const [quickRegName, setQuickRegName] = useState("");
   const [quickRegCpf, setQuickRegCpf] = useState("");
   const [quickRegRg, setQuickRegRg] = useState("");
+  const [quickRegPhone, setQuickRegPhone] = useState("");
   const [quickRegPix, setQuickRegPix] = useState("");
   const [quickRegPixType, setQuickRegPixType] = useState<"cpf" | "email" | "phone" | "random" | "cnpj">("cpf");
   const [docFrontBase64, setDocFrontBase64] = useState<string | null>(null);
@@ -43,8 +38,18 @@ export default function PortalLiderPage() {
   const fileInputFrontRef = useRef<HTMLInputElement>(null);
   const fileInputBackRef = useRef<HTMLInputElement>(null);
 
+  // Vale Rápido
+  const [quickExpenseCpf, setQuickExpenseCpf] = useState("");
+  const [quickExpenseType, setQuickExpenseType] = useState<"vale" | "bonus" | "marmita">("vale");
+  const [quickExpenseValue, setQuickExpenseValue] = useState("");
+
+  // PIX
+  const [pixChangeCpf, setPixChangeCpf] = useState("");
+  const [newPixKey, setNewPixKey] = useState("");
+  const [pixChangeOpen, setPixChangeOpen] = useState(false);
+
   // Dados
-  const { data: mySchedules, isLoading } = trpc.portalLider.mySchedules.useQuery();
+  const { data: mySchedules, isLoading: schedulesLoading } = trpc.portalLider.mySchedules.useQuery();
   const { data: schedule, isLoading: scheduleLoading } = trpc.portalLider.getScheduleDetail.useQuery(
     selectedScheduleId || 0,
     { enabled: !!selectedScheduleId }
@@ -53,77 +58,83 @@ export default function PortalLiderPage() {
   // Mutations
   const checkInMut = trpc.portalLider.checkIn.useMutation({
     onSuccess: () => {
+      utils.portalLider.mySchedules.invalidate();
       utils.portalLider.getScheduleDetail.invalidate();
       toast.success("Check-in registrado!");
     },
+    onError: (err) => toast.error(err.message),
   });
 
   const checkOutMut = trpc.portalLider.checkOut.useMutation({
     onSuccess: () => {
       utils.portalLider.getScheduleDetail.invalidate();
       toast.success("Check-out registrado!");
+      setSelectedScheduleId(null);
+      setActiveTab("hoje");
     },
+    onError: (err) => toast.error(err.message),
   });
 
-  const updatePresenceMut = trpc.portalLider.setAttendance.useMutation({
+  const setAttendanceMut = trpc.portalLider.setAttendance.useMutation({
     onSuccess: () => {
       utils.portalLider.getScheduleDetail.invalidate();
       toast.success("Presença atualizada!");
     },
-  });
-
-  const requestPixChangeMut = trpc.portalLider.requestPixChange.useMutation({
-    onSuccess: () => {
-      utils.portalLider.getScheduleDetail.invalidate();
-      toast.success("Solicitação de alteração PIX enviada!");
-      setPixChangeOpen(false);
-      setNewPixKey("");
-    },
+    onError: (err) => toast.error(err.message),
   });
 
   const quickRegisterMut = trpc.portalLider.quickRegisterEmployee.useMutation({
     onSuccess: () => {
-      toast.success("Funcionário cadastrado com sucesso!");
-      // Limpar formulário
+      toast.success("Funcionário cadastrado!");
       setQuickRegName("");
       setQuickRegCpf("");
       setQuickRegRg("");
+      setQuickRegPhone("");
       setQuickRegPix("");
       setDocFrontBase64(null);
       setDocBackBase64(null);
       setDocFrontPreview(null);
       setDocBackPreview(null);
-      setActiveTab("meus-planejamentos");
     },
-    onError: (err) => {
-      toast.error(err.message || "Erro ao cadastrar funcionário");
-    },
+    onError: (err) => toast.error(err.message),
   });
 
-  const handleCheckIn = (allocId: number) => {
-    if (selectedScheduleId) checkInMut.mutate({ allocationId: allocId, scheduleId: selectedScheduleId });
+  const requestPixChangeMut = trpc.portalLider.requestPixChange.useMutation({
+    onSuccess: () => {
+      toast.success("Solicitação enviada!");
+      setPixChangeCpf("");
+      setNewPixKey("");
+      setPixChangeOpen(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Handlers
+  const handleCheckIn = () => {
+    if (!selectedScheduleId) return;
+    checkInMut.mutate({ scheduleId: selectedScheduleId, allocationId: 0 });
   };
 
-  const handleCheckOut = (allocId: number) => {
-    if (selectedScheduleId) checkOutMut.mutate({ allocationId: allocId, scheduleId: selectedScheduleId });
-  };
-
-  const handlePresenceChange = (allocId: number, status: "presente" | "faltou" | "parcial") => {
-    if (selectedScheduleId) updatePresenceMut.mutate({ allocationId: allocId, scheduleId: selectedScheduleId, status, notes: "" });
-  };
-
-  const handlePixChange = async () => {
-    if (!newPixKey) {
-      toast.error("Chave PIX é obrigatória");
+  const handleCheckOut = () => {
+    if (!selectedScheduleId || !schedule) return;
+    const unmarked = schedule.allocations?.filter((a: any) => !a.attendanceStatus) || [];
+    if (unmarked.length > 0) {
+      toast.error(`Marque presença de todos os ${unmarked.length} diarista(s) antes de fechar`);
       return;
     }
-    await requestPixChangeMut.mutateAsync({
-      employeeId: 1,
-      newPixKey,
+    checkOutMut.mutate({ scheduleId: selectedScheduleId, allocationId: 0 });
+  };
+
+  const handlePresenceChange = (allocId: number, status: "presente" | "faltou" | "parcial", hours?: string) => {
+    if (!selectedScheduleId) return;
+    setAttendanceMut.mutate({
+      allocationId: allocId,
+      scheduleId: selectedScheduleId,
+      status,
+      notes: "",
     });
   };
 
-  // Handlers para upload de fotos
   const handleFileSelect = async (file: File, isBack: boolean) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -141,10 +152,9 @@ export default function PortalLiderPage() {
 
   const handleQuickRegister = async () => {
     if (!quickRegName || !quickRegCpf || !quickRegPix) {
-      toast.error("Preencha todos os campos obrigatórios");
+      toast.error("Preencha nome, CPF e chave PIX");
       return;
     }
-
     await quickRegisterMut.mutateAsync({
       name: quickRegName,
       cpf: quickRegCpf,
@@ -156,47 +166,75 @@ export default function PortalLiderPage() {
     });
   };
 
+  const handlePixChange = async () => {
+    if (!pixChangeCpf || !newPixKey) {
+      toast.error("Preencha CPF e nova chave PIX");
+      return;
+    }
+    await requestPixChangeMut.mutateAsync({
+      employeeId: 1,
+      newPixKey,
+    });
+  };
+
+  // Filtros
+  const todaySchedules = useMemo(() => {
+    if (!mySchedules) return [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return mySchedules.filter((s: any) => {
+      const sDate = new Date(s.date);
+      sDate.setHours(0, 0, 0, 0);
+      return sDate.getTime() === today.getTime();
+    });
+  }, [mySchedules]);
+
+  const markedCount = useMemo(() => {
+    if (!schedule?.allocations) return 0;
+    return schedule.allocations.filter((a: any) => a.attendanceStatus).length;
+  }, [schedule]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 md:p-6">
-      <div className="max-w-2xl mx-auto space-y-4 md:space-y-6">
+      <div className="max-w-3xl mx-auto space-y-4">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Portal do Líder</h1>
-          <p className="text-slate-400 text-xs md:text-sm">Gerencie suas operações em tempo real</p>
+        <div className="text-center mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-white">Portal do Líder</h1>
+          <p className="text-slate-400 text-sm mt-1">Gerencie suas operações em tempo real</p>
         </div>
 
         {/* Abas */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 bg-slate-800 h-auto p-1">
-            <TabsTrigger value="meus-planejamentos" className="text-xs py-2">
-              <Clock className="h-3 w-3 md:h-4 md:w-4 mr-1" /> <span className="hidden sm:inline">Meus</span>
+            <TabsTrigger value="hoje" className="text-xs py-3 md:text-sm">
+              <Clock className="h-4 w-4 mr-1" /> Hoje
             </TabsTrigger>
-            <TabsTrigger value="presenca" className="text-xs py-2">
-              <Users className="h-3 w-3 md:h-4 md:w-4 mr-1" /> <span className="hidden sm:inline">Presença</span>
+            <TabsTrigger value="presenca" className="text-xs py-3 md:text-sm" disabled={!selectedScheduleId}>
+              <Users className="h-4 w-4 mr-1" /> Presença
             </TabsTrigger>
-            <TabsTrigger value="cadastro" className="text-xs py-2">
-              <Plus className="h-3 w-3 md:h-4 md:w-4 mr-1" /> <span className="hidden sm:inline">Cadastro</span>
+            <TabsTrigger value="vale" className="text-xs py-3 md:text-sm">
+              <Plus className="h-4 w-4 mr-1" /> Vale
             </TabsTrigger>
-            <TabsTrigger value="lancamentos" className="text-xs py-2">
-              <FileText className="h-3 w-3 md:h-4 md:w-4 mr-1" /> <span className="hidden sm:inline">Lançar</span>
+            <TabsTrigger value="mais" className="text-xs py-3 md:text-sm">
+              <FileText className="h-4 w-4 mr-1" /> Mais
             </TabsTrigger>
           </TabsList>
 
-          {/* Aba 1: Meus Planejamentos */}
-          <TabsContent value="meus-planejamentos" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-            {isLoading ? (
+          {/* ABA HOJE */}
+          <TabsContent value="hoje" className="space-y-3 mt-4">
+            {schedulesLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
-            ) : !mySchedules || mySchedules.length === 0 ? (
+            ) : !todaySchedules || todaySchedules.length === 0 ? (
               <Card className="bg-slate-800 border-slate-700">
-                <CardContent className="py-8 md:py-12 text-center text-slate-400 text-sm">
-                  Nenhum planejamento atribuído.
+                <CardContent className="py-12 text-center text-slate-400">
+                  Nenhum planejamento para hoje.
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-2 md:space-y-3">
-                {mySchedules.map((sched: any) => (
+              <div className="space-y-3">
+                {todaySchedules.map((sched: any) => (
                   <Card
                     key={sched.id}
                     className={`bg-slate-800 border-slate-700 cursor-pointer transition-all ${
@@ -207,17 +245,28 @@ export default function PortalLiderPage() {
                       setActiveTab("presenca");
                     }}
                   >
-                    <CardContent className="p-3 md:p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-white text-sm md:text-base">{fmtDate(sched.date)}</div>
-                          <div className="text-xs md:text-sm text-slate-400 truncate">{sched.clientName}</div>
-                          <div className="text-xs text-slate-500 mt-1">{sched.shiftName} • {sched.totalPeople} pessoas</div>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="font-bold text-white text-lg">{sched.clientName}</div>
+                          <div className="text-sm text-slate-400 mt-1">{sched.shiftName} • {sched.startTime}-{sched.endTime}</div>
+                          <div className="text-xs text-slate-500 mt-1">{sched.location} • {sched.totalPeople} diaristas</div>
                         </div>
-                        <Badge variant={sched.status === "validado" ? "default" : "outline"} className="text-xs">
-                          {sched.status === "validado" ? "✓" : "◯"}
-                        </Badge>
+                        <div className="text-right">
+                          <Badge className="text-xs">{sched.status === "validado" ? "Validado" : "Pendente"}</Badge>
+                        </div>
                       </div>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedScheduleId(sched.id);
+                          handleCheckIn();
+                        }}
+                        disabled={checkInMut.isPending || sched.checkInTime}
+                        className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white h-12 text-base font-semibold"
+                      >
+                        {sched.checkInTime ? "✓ Iniciado" : "Iniciar"}
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -225,12 +274,12 @@ export default function PortalLiderPage() {
             )}
           </TabsContent>
 
-          {/* Aba 2: Presença & Check-in */}
-          <TabsContent value="presenca" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
+          {/* ABA PRESENÇA */}
+          <TabsContent value="presenca" className="space-y-3 mt-4">
             {!selectedScheduleId ? (
               <Card className="bg-slate-800 border-slate-700">
-                <CardContent className="py-8 text-center text-slate-400 text-sm">
-                  Selecione um planejamento para ver presença.
+                <CardContent className="py-8 text-center text-slate-400">
+                  Selecione um planejamento.
                 </CardContent>
               </Card>
             ) : scheduleLoading ? (
@@ -238,321 +287,328 @@ export default function PortalLiderPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : schedule ? (
-              <div className="space-y-3 md:space-y-4">
-                {/* Resumo */}
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="pb-2 md:pb-3">
-                    <CardTitle className="text-white text-base md:text-lg">Resumo</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-2 md:gap-4">
-                    <div className="bg-slate-700 p-2 md:p-3 rounded">
-                      <div className="text-xs text-slate-400">Pessoas</div>
-                      <div className="text-lg md:text-xl font-bold text-white">{schedule.totalPeople}</div>
+              <div className="space-y-3">
+                {/* Contador */}
+                <Card className="bg-blue-900/30 border-blue-700">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-blue-300">Presença Marcada</div>
+                      <div className="text-2xl font-bold text-white">{markedCount} de {schedule?.allocations?.length || 0}</div>
                     </div>
-                    <div className="bg-slate-700 p-2 md:p-3 rounded">
-                      <div className="text-xs text-slate-400">Valor Total</div>
-                      <div className="text-sm md:text-lg font-bold text-white">{BRL(schedule.totalPayValue)}</div>
-                    </div>
+                    {markedCount < (schedule?.allocations?.length || 0) && (
+                      <Badge variant="destructive" className="text-base px-3 py-2">
+                        {(schedule?.allocations?.length || 0) - markedCount} pendentes
+                      </Badge>
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Lista de Presença */}
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="pb-2 md:pb-3">
-                    <CardTitle className="text-white text-base md:text-lg">Presença</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 md:space-y-3">
-                    {schedule.allocations && schedule.allocations.map((alloc: any) => (
-                      <div key={alloc.id} className="bg-slate-700 p-2 md:p-3 rounded space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-white text-sm md:text-base truncate">{alloc.employeeName}</div>
-                            <div className="text-xs text-slate-400">{alloc.cpf}</div>
-                          </div>
-                          <Badge
-                            variant={
-                              alloc.attendanceStatus === "presente"
-                                ? "default"
+                {/* Lista de Diaristas */}
+                <div className="space-y-2">
+                  {schedule.allocations?.map((alloc: any) => {
+                    const shiftHours = 8; // Padrão 8 horas
+                    const partialHour = parseFloat(partialHours[alloc.id] || "0");
+                    const partialPayValue = partialHour > 0 ? (parseFloat(alloc.payValue) * partialHour / shiftHours).toFixed(2) : "0";
+
+                    return (
+                      <Card key={alloc.id} className="bg-slate-800 border-slate-700">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="font-semibold text-white text-base">{alloc.employeeName}</div>
+                              <div className="text-xs text-slate-400">{alloc.jobFunctionName}</div>
+                              <div className="text-sm text-slate-300 mt-1">{BRL(alloc.payValue)}</div>
+                            </div>
+                            <Badge
+                              variant={
+                                alloc.attendanceStatus === "presente"
+                                  ? "default"
+                                  : alloc.attendanceStatus === "faltou"
+                                    ? "destructive"
+                                    : alloc.attendanceStatus === "parcial"
+                                      ? "secondary"
+                                      : "outline"
+                              }
+                              className="text-xs"
+                            >
+                              {alloc.attendanceStatus === "presente"
+                                ? "✓ Presente"
                                 : alloc.attendanceStatus === "faltou"
-                                  ? "destructive"
-                                  : "outline"
-                            }
-                            className="text-xs flex-shrink-0"
-                          >
-                            {alloc.attendanceStatus === "presente" ? "✓" : alloc.attendanceStatus === "faltou" ? "✗" : "~"}
-                          </Badge>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <div className="text-slate-400">Check-in</div>
-                            <div className="text-white font-mono">{fmtTime(alloc.checkInTime)}</div>
+                                  ? "✗ Faltou"
+                                  : alloc.attendanceStatus === "parcial"
+                                    ? "~ Parcial"
+                                    : "○ Pendente"}
+                            </Badge>
                           </div>
-                          <div>
-                            <div className="text-slate-400">Check-out</div>
-                            <div className="text-white font-mono">{fmtTime(alloc.checkOutTime)}</div>
+
+                          {/* Botões Presença */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <Button
+                              onClick={() => handlePresenceChange(alloc.id, "presente")}
+                              variant={alloc.attendanceStatus === "presente" ? "default" : "outline"}
+                              disabled={setAttendanceMut.isPending}
+                              className="h-12 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              Presente
+                            </Button>
+                            <Button
+                              onClick={() => handlePresenceChange(alloc.id, "faltou")}
+                              variant={alloc.attendanceStatus === "faltou" ? "default" : "outline"}
+                              disabled={setAttendanceMut.isPending}
+                              className="h-12 text-sm font-semibold bg-red-600 hover:bg-red-700 text-white"
+                            >
+                              Faltou
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                if (alloc.attendanceStatus !== "parcial") {
+                                  handlePresenceChange(alloc.id, "parcial", "4");
+                                  setPartialHours({ ...partialHours, [alloc.id]: "4" });
+                                }
+                              }}
+                              variant={alloc.attendanceStatus === "parcial" ? "default" : "outline"}
+                              disabled={setAttendanceMut.isPending}
+                              className="h-12 text-sm font-semibold bg-yellow-600 hover:bg-yellow-700 text-white"
+                            >
+                              Parcial
+                            </Button>
                           </div>
-                        </div>
 
-                        <div className="flex gap-1 pt-2">
-                          {!alloc.checkInTime && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleCheckIn(alloc.id)}
-                              disabled={checkInMut.isPending}
-                              className="flex-1 text-xs h-8"
-                            >
-                              <Clock className="h-3 w-3 mr-1" /> Check-in
-                            </Button>
+                          {/* Horas Parciais */}
+                          {alloc.attendanceStatus === "parcial" && (
+                            <div className="bg-slate-700 p-3 rounded space-y-2">
+                              <Label className="text-xs text-slate-300">Horas trabalhadas (0.5 a {shiftHours})</Label>
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  type="number"
+                                  min="0.5"
+                                  max={shiftHours}
+                                  step="0.5"
+                                  value={partialHours[alloc.id] || shiftHours / 2}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPartialHours({ ...partialHours, [alloc.id]: val });
+                                    handlePresenceChange(alloc.id, "parcial", val);
+                                  }}
+                                  className="flex-1 bg-slate-600 border-slate-500 text-white text-sm h-10"
+                                />
+                                <div className="text-sm font-semibold text-green-400">{BRL(partialPayValue)}</div>
+                              </div>
+                              <div className="text-xs text-slate-400">
+                                {partialHour}h de {shiftHours}h = {BRL(partialPayValue)}
+                              </div>
+                            </div>
                           )}
-                          {alloc.checkInTime && !alloc.checkOutTime && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleCheckOut(alloc.id)}
-                              disabled={checkOutMut.isPending}
-                              className="flex-1 text-xs h-8"
-                            >
-                              <Clock className="h-3 w-3 mr-1" /> Check-out
-                            </Button>
-                          )}
-                        </div>
 
-                        <div className="flex gap-1 pt-1">
-                          {["presente", "faltou", "parcial"].map((status) => (
-                            <Button
-                              key={status}
-                              size="sm"
-                              variant={alloc.attendanceStatus === status ? "default" : "outline"}
-                              onClick={() => handlePresenceChange(alloc.id, status as any)}
-                              disabled={updatePresenceMut.isPending}
-                              className="flex-1 text-xs h-8"
-                            >
-                              {status === "presente" ? "Presente" : status === "faltou" ? "Faltou" : "Parcial"}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                          {/* Observação */}
+                          {alloc.attendanceStatus && (
+                            <Input
+                              placeholder="Observação (opcional)"
+                              className="bg-slate-700 border-slate-600 text-white text-xs h-9"
+                              defaultValue={alloc.notes || ""}
+                            />
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Botão Fechar */}
+                <Button
+                  onClick={handleCheckOut}
+                  disabled={checkOutMut.isPending || markedCount < (schedule?.allocations?.length || 0)}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold"
+                >
+                  {checkOutMut.isPending ? "Fechando..." : "Fechar Presença"}
+                </Button>
               </div>
             ) : null}
           </TabsContent>
 
-          {/* Aba 3: Cadastro Rápido */}
-          <TabsContent value="cadastro" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
+          {/* ABA VALE RÁPIDO */}
+          <TabsContent value="vale" className="space-y-3 mt-4">
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2 md:pb-3">
-                <CardTitle className="text-white text-base md:text-lg">Cadastro Rápido de Funcionário</CardTitle>
+              <CardHeader>
+                <CardTitle className="text-white">Lançamento Rápido</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 md:space-y-4">
-                {/* Dados Pessoais */}
-                <div className="space-y-2">
-                  <Label className="text-slate-300 text-sm">Nome *</Label>
-                  <Input
-                    placeholder="Nome completo"
-                    value={quickRegName}
-                    onChange={(e) => setQuickRegName(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white text-sm"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-2">
-                    <Label className="text-slate-300 text-sm">CPF *</Label>
-                    <Input
-                      placeholder="000.000.000-00"
-                      value={quickRegCpf}
-                      onChange={(e) => setQuickRegCpf(e.target.value)}
-                      className="bg-slate-700 border-slate-600 text-white text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-slate-300 text-sm">RG</Label>
-                    <Input
-                      placeholder="RG"
-                      value={quickRegRg}
-                      onChange={(e) => setQuickRegRg(e.target.value)}
-                      className="bg-slate-700 border-slate-600 text-white text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* PIX */}
-                <div className="space-y-2">
-                  <Label className="text-slate-300 text-sm">Chave PIX *</Label>
-                  <Input
-                    placeholder="CPF, email, telefone ou UUID"
-                    value={quickRegPix}
-                    onChange={(e) => setQuickRegPix(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white text-sm"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-slate-300 text-sm">Tipo de Chave PIX *</Label>
-                  <select
-                    value={quickRegPixType}
-                    onChange={(e) => setQuickRegPixType(e.target.value as any)}
-                    className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded px-3 py-2"
-                  >
-                    <option value="cpf">CPF</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Telefone</option>
-                    <option value="cnpj">CNPJ</option>
-                    <option value="random">Aleatória (UUID)</option>
-                  </select>
-                </div>
-
-                {/* Upload de Documentos */}
-                <div className="border-t border-slate-600 pt-3 md:pt-4">
-                  <Label className="text-slate-300 text-sm block mb-3">Fotos do Documento</Label>
-
-                  {/* Frente */}
-                  <div className="space-y-2 mb-3">
-                    <Label className="text-slate-400 text-xs">Frente do Documento</Label>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => fileInputFrontRef.current?.click()}
-                        className="flex-1 text-xs h-9"
-                      >
-                        <Camera className="h-3 w-3 mr-1" /> Selecionar
-                      </Button>
-                      {docFrontPreview && <div className="text-xs text-green-400 flex items-center">✓ Carregada</div>}
-                    </div>
-                    <input
-                      ref={fileInputFrontRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) handleFileSelect(e.target.files[0], false);
-                      }}
-                      className="hidden"
-                    />
-                    {docFrontPreview && (
-                      <img src={docFrontPreview} alt="Frente" className="w-full h-32 object-cover rounded border border-slate-600" />
-                    )}
-                  </div>
-
-                  {/* Verso */}
-                  <div className="space-y-2">
-                    <Label className="text-slate-400 text-xs">Verso do Documento</Label>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => fileInputBackRef.current?.click()}
-                        className="flex-1 text-xs h-9"
-                      >
-                        <Camera className="h-3 w-3 mr-1" /> Selecionar
-                      </Button>
-                      {docBackPreview && <div className="text-xs text-green-400 flex items-center">✓ Carregada</div>}
-                    </div>
-                    <input
-                      ref={fileInputBackRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) handleFileSelect(e.target.files[0], true);
-                      }}
-                      className="hidden"
-                    />
-                    {docBackPreview && (
-                      <img src={docBackPreview} alt="Verso" className="w-full h-32 object-cover rounded border border-slate-600" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Botão Cadastrar */}
-                <Button
-                  onClick={handleQuickRegister}
-                  disabled={quickRegisterMut.isPending}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white text-sm h-10"
-                >
-                  {quickRegisterMut.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cadastrando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" /> Cadastrar Funcionário
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Aba 4: Lançamentos Rápidos */}
-          <TabsContent value="lancamentos" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2 md:pb-3">
-                <CardTitle className="text-white text-base md:text-lg">Lançamento Rápido</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 md:space-y-4">
+              <CardContent className="space-y-4">
                 <div>
                   <Label className="text-slate-300 text-sm">CPF do Funcionário</Label>
                   <Input
                     placeholder="000.000.000-00"
-                    value={quickVoucherCpf}
-                    onChange={(e) => setQuickVoucherCpf(e.target.value)}
-                    className="mt-2 bg-slate-700 border-slate-600 text-white text-sm"
+                    value={quickExpenseCpf}
+                    onChange={(e) => setQuickExpenseCpf(e.target.value)}
+                    className="mt-2 bg-slate-700 border-slate-600 text-white text-sm h-10"
                   />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-sm">Tipo</Label>
+                  <select
+                    value={quickExpenseType}
+                    onChange={(e) => setQuickExpenseType(e.target.value as any)}
+                    className="w-full mt-2 bg-slate-700 border border-slate-600 text-white text-sm rounded px-3 py-2 h-10"
+                  >
+                    <option value="vale">Vale</option>
+                    <option value="bonus">Bônus</option>
+                    <option value="marmita">Marmita</option>
+                  </select>
                 </div>
                 <div>
                   <Label className="text-slate-300 text-sm">Valor</Label>
                   <Input
                     type="number"
                     placeholder="0.00"
-                    value={quickVoucherValue}
-                    onChange={(e) => setQuickVoucherValue(e.target.value)}
-                    className="mt-2 bg-slate-700 border-slate-600 text-white text-sm"
+                    value={quickExpenseValue}
+                    onChange={(e) => setQuickExpenseValue(e.target.value)}
+                    className="mt-2 bg-slate-700 border-slate-600 text-white text-sm h-10"
                   />
                 </div>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm h-10">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-semibold">
                   <Plus className="h-4 w-4 mr-2" /> Lançar
                 </Button>
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ABA MAIS */}
+          <TabsContent value="mais" className="space-y-3 mt-4">
+            <Tabs defaultValue="cadastro" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-slate-800">
+                <TabsTrigger value="cadastro" className="text-xs md:text-sm">Cadastro Rápido</TabsTrigger>
+                <TabsTrigger value="pix" className="text-xs md:text-sm">Alterar PIX</TabsTrigger>
+              </TabsList>
+
+              {/* Cadastro Rápido */}
+              <TabsContent value="cadastro" className="space-y-3 mt-4">
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardContent className="p-4 space-y-3">
+                    <Input
+                      placeholder="Nome completo"
+                      value={quickRegName}
+                      onChange={(e) => setQuickRegName(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <Input
+                      placeholder="CPF"
+                      value={quickRegCpf}
+                      onChange={(e) => setQuickRegCpf(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <Input
+                      placeholder="RG"
+                      value={quickRegRg}
+                      onChange={(e) => setQuickRegRg(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <Input
+                      placeholder="Chave PIX"
+                      value={quickRegPix}
+                      onChange={(e) => setQuickRegPix(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <select
+                      value={quickRegPixType}
+                      onChange={(e) => setQuickRegPixType(e.target.value as any)}
+                      className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded px-3 py-2 h-10"
+                    >
+                      <option value="cpf">CPF</option>
+                      <option value="email">Email</option>
+                      <option value="phone">Telefone</option>
+                      <option value="cnpj">CNPJ</option>
+                      <option value="random">Aleatória</option>
+                    </select>
+
+                    {/* Upload Documentos */}
+                    <div className="border-t border-slate-600 pt-3 space-y-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputFrontRef.current?.click()}
+                        className="w-full text-xs h-9"
+                      >
+                        <Camera className="h-3 w-3 mr-1" /> Frente do Documento
+                      </Button>
+                      <input
+                        ref={fileInputFrontRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0], false)}
+                        className="hidden"
+                      />
+                      {docFrontPreview && (
+                        <div className="text-xs text-green-400 flex items-center gap-1">
+                          ✓ Frente carregada
+                        </div>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputBackRef.current?.click()}
+                        className="w-full text-xs h-9"
+                      >
+                        <Camera className="h-3 w-3 mr-1" /> Verso do Documento
+                      </Button>
+                      <input
+                        ref={fileInputBackRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0], true)}
+                        className="hidden"
+                      />
+                      {docBackPreview && (
+                        <div className="text-xs text-green-400 flex items-center gap-1">
+                          ✓ Verso carregado
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={handleQuickRegister}
+                      disabled={quickRegisterMut.isPending}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white h-11 text-base font-semibold"
+                    >
+                      {quickRegisterMut.isPending ? "Cadastrando..." : "Cadastrar"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Alterar PIX */}
+              <TabsContent value="pix" className="space-y-3 mt-4">
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardContent className="p-4 space-y-3">
+                    <Input
+                      placeholder="CPF do funcionário"
+                      value={pixChangeCpf}
+                      onChange={(e) => setPixChangeCpf(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <Input
+                      placeholder="Nova chave PIX"
+                      value={newPixKey}
+                      onChange={(e) => setNewPixKey(e.target.value)}
+                      className="bg-slate-700 border-slate-600 text-white text-sm h-10"
+                    />
+                    <div className="bg-blue-900/30 border border-blue-700 p-3 rounded text-xs text-blue-300">
+                      <AlertCircle className="h-4 w-4 inline mr-2" />
+                      Solicitação será enviada para aprovação do admin.
+                    </div>
+                    <Button
+                      onClick={handlePixChange}
+                      disabled={requestPixChangeMut.isPending}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base font-semibold"
+                    >
+                      {requestPixChangeMut.isPending ? "Enviando..." : "Solicitar Alteração"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
         </Tabs>
       </div>
-
-      {/* Modal PIX */}
-      <Dialog open={pixChangeOpen} onOpenChange={setPixChangeOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-white">Solicitar Alteração de Chave PIX</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 md:space-y-4">
-            <div>
-              <Label className="text-slate-300 text-sm">Nova Chave PIX</Label>
-              <Input
-                placeholder="Informe a nova chave PIX"
-                value={newPixKey}
-                onChange={(e) => setNewPixKey(e.target.value)}
-                className="mt-2 bg-slate-700 border-slate-600 text-white text-sm"
-              />
-            </div>
-            <div className="bg-blue-900/30 border border-blue-700 p-3 rounded text-xs md:text-sm text-blue-300">
-              <AlertCircle className="h-4 w-4 inline mr-2" />
-              A solicitação será enviada para aprovação.
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setPixChangeOpen(false)} className="text-slate-300 text-sm h-9">
-              Cancelar
-            </Button>
-            <Button onClick={handlePixChange} disabled={requestPixChangeMut.isPending} className="bg-blue-600 text-sm h-9">
-              Enviar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
