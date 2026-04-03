@@ -5,6 +5,7 @@ import CrudPage, { type FieldDef } from "@/components/CrudPage";
 import { Button } from "@/components/ui/button";
 import { CreditCard, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { MonthNavigator } from "@/components/dashboard-components";
 
 const statusRender = (val: string) => {
   const styles: Record<string, string> = {
@@ -55,9 +56,24 @@ async function downloadFile(url: string, fallbackName: string) {
 }
 
 export default function AccountsPayablePage() {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const { canCreate, canEdit, canDelete } = usePermissions();
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.financeiro.payable.list.useQuery();
+
+  const handlePreviousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
+  const filteredData = data?.filter((item: any) => {
+    const itemDate = new Date(item.dueDate);
+    return itemDate.getFullYear() === currentMonth.getFullYear() &&
+           itemDate.getMonth() === currentMonth.getMonth();
+  }) || [];
   const createMut = trpc.financeiro.payable.create.useMutation({ onSuccess: () => { utils.financeiro.payable.list.invalidate(); utils.financeiro.payable.summary.invalidate(); } });
   const updateMut = trpc.financeiro.payable.update.useMutation({ onSuccess: () => { utils.financeiro.payable.list.invalidate(); utils.financeiro.payable.summary.invalidate(); } });
   const deleteMut = trpc.financeiro.payable.delete.useMutation({ onSuccess: () => { utils.financeiro.payable.list.invalidate(); utils.financeiro.payable.summary.invalidate(); } });
@@ -103,21 +119,24 @@ export default function AccountsPayablePage() {
   );
 
   return (
-    <CrudPage
-      title="Contas a Pagar"
-      subtitle="Despesas e obriga\u00e7\u00f5es financeiras"
-      icon={<CreditCard className="h-6 w-6 text-red-400" />}
-      fields={fields}
-      data={data || []}
-      isLoading={isLoading}
-      canCreate={canCreate("accounts_payable")}
-      canEdit={canEdit("accounts_payable")}
-      canDelete={canDelete("accounts_payable")}
-      onCreate={async (d) => { await createMut.mutateAsync(d); }}
-      onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
-      onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
-      searchPlaceholder="Buscar por descri\u00e7\u00e3o..."
-      headerExtra={exportButtons}
-    />
+    <div className="space-y-4">
+      <MonthNavigator currentMonth={currentMonth} onPreviousMonth={handlePreviousMonth} onNextMonth={handleNextMonth} />
+      <CrudPage
+        title="Contas a Pagar"
+        subtitle="Despesas e obrigações financeiras"
+        icon={<CreditCard className="h-6 w-6 text-red-400" />}
+        fields={fields}
+        data={filteredData}
+        isLoading={isLoading}
+        canCreate={canCreate("accounts_payable")}
+        canEdit={canEdit("accounts_payable")}
+        canDelete={canDelete("accounts_payable")}
+        onCreate={async (d) => { await createMut.mutateAsync(d); }}
+        onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
+        onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
+        searchPlaceholder="Buscar por descrição..."
+        headerExtra={exportButtons}
+      />
+    </div>
   );
 }

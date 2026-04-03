@@ -5,6 +5,7 @@ import CrudPage, { type FieldDef } from "@/components/CrudPage";
 import { Button } from "@/components/ui/button";
 import { Receipt, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { MonthNavigator } from "@/components/dashboard-components";
 
 const statusRender = (val: string) => {
   const styles: Record<string, string> = {
@@ -55,9 +56,24 @@ async function downloadFile(url: string, fallbackName: string) {
 }
 
 export default function AccountsReceivablePage() {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const { canCreate, canEdit, canDelete } = usePermissions();
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.financeiro.receivable.list.useQuery();
+
+  const handlePreviousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
+  const filteredData = data?.filter((item: any) => {
+    const itemDate = new Date(item.dueDate);
+    return itemDate.getFullYear() === currentMonth.getFullYear() &&
+           itemDate.getMonth() === currentMonth.getMonth();
+  }) || [];
   const createMut = trpc.financeiro.receivable.create.useMutation({ onSuccess: () => { utils.financeiro.receivable.list.invalidate(); utils.financeiro.receivable.summary.invalidate(); } });
   const updateMut = trpc.financeiro.receivable.update.useMutation({ onSuccess: () => { utils.financeiro.receivable.list.invalidate(); utils.financeiro.receivable.summary.invalidate(); } });
   const deleteMut = trpc.financeiro.receivable.delete.useMutation({ onSuccess: () => { utils.financeiro.receivable.list.invalidate(); utils.financeiro.receivable.summary.invalidate(); } });
@@ -103,21 +119,24 @@ export default function AccountsReceivablePage() {
   );
 
   return (
-    <CrudPage
-      title="Contas a Receber"
-      subtitle="Receitas e cr\u00e9ditos a receber"
-      icon={<Receipt className="h-6 w-6 text-emerald-400" />}
-      fields={fields}
-      data={data || []}
-      isLoading={isLoading}
-      canCreate={canCreate("accounts_receivable")}
-      canEdit={canEdit("accounts_receivable")}
-      canDelete={canDelete("accounts_receivable")}
-      onCreate={async (d) => { await createMut.mutateAsync(d); }}
-      onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
-      onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
-      searchPlaceholder="Buscar por descri\u00e7\u00e3o..."
-      headerExtra={exportButtons}
-    />
+    <div className="space-y-4">
+      <MonthNavigator currentMonth={currentMonth} onPreviousMonth={handlePreviousMonth} onNextMonth={handleNextMonth} />
+      <CrudPage
+        title="Contas a Receber"
+        subtitle="Receitas e créditos a receber"
+        icon={<Receipt className="h-6 w-6 text-emerald-400" />}
+        fields={fields}
+        data={filteredData}
+        isLoading={isLoading}
+        canCreate={canCreate("accounts_receivable")}
+        canEdit={canEdit("accounts_receivable")}
+        canDelete={canDelete("accounts_receivable")}
+        onCreate={async (d) => { await createMut.mutateAsync(d); }}
+        onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
+        onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
+        searchPlaceholder="Buscar por descrição..."
+        headerExtra={exportButtons}
+      />
+    </div>
   );
 }

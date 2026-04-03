@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, XCircle, Clock, Search, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Search, Loader2, AlertCircle, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
 
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 const fmtTime = (d: any) => d ? new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -266,6 +266,24 @@ export default function PixApprovalsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Botões de Exportação */}
+      {activeTab === "rejeitadas" && (
+        <div className="flex gap-2 mt-4">
+          <Button
+            onClick={() => window.location.href = "/api/export/pix-history/excel"}
+            className="flex-1 bg-green-600 hover:bg-green-700"
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar Excel
+          </Button>
+          <Button
+            onClick={() => window.location.href = "/api/export/pix-history/pdf"}
+            className="flex-1 bg-blue-600 hover:bg-blue-700"
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar PDF
+          </Button>
+        </div>
+      )}
 
       {/* Modal: Confirmar Aprovação */}
       <Dialog open={approveModalOpen} onOpenChange={setApproveModalOpen}>

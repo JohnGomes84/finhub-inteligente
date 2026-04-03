@@ -6,6 +6,7 @@ import { accountsPayable, accountsReceivable } from "../../drizzle/schema";
 import { desc } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 import { checkPermission } from "../controle/permissionControl";
+import { exportPixHistoryExcel, exportPixHistoryPdf } from "../lib/pix-export";
 
 // Autenticar request Express usando o mesmo SDK do tRPC
 async function authenticateExpress(req: Request, res: Response): Promise<number | null> {
@@ -468,5 +469,39 @@ export function registerExportRoutes(app: Express) {
     if (!db) return res.status(500).json({ error: "DB indisponível" });
     const data = await db.select().from(accountsReceivable).orderBy(desc(accountsReceivable.dueDate));
     generateReceivablePDF(res, data);
+  });
+
+  // PIX History - Excel
+  app.get("/api/export/pix-history/excel", async (req: Request, res: Response) => {
+    const userId = await authenticateExpress(req, res);
+    if (!userId) return;
+    const allowed = await checkPermission(userId, "users", "canView");
+    if (!allowed) return res.status(403).json({ error: "Sem permissão" });
+
+    try {
+      const buffer = await exportPixHistoryExcel();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="historico-pix-${new Date().toISOString().split('T')[0]}.xlsx"`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao exportar" });
+    }
+  });
+
+  // PIX History - PDF
+  app.get("/api/export/pix-history/pdf", async (req: Request, res: Response) => {
+    const userId = await authenticateExpress(req, res);
+    if (!userId) return;
+    const allowed = await checkPermission(userId, "users", "canView");
+    if (!allowed) return res.status(403).json({ error: "Sem permissão" });
+
+    try {
+      const buffer = await exportPixHistoryPdf();
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="historico-pix-${new Date().toISOString().split('T')[0]}.pdf"`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao exportar" });
+    }
   });
 }
