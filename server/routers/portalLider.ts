@@ -551,10 +551,26 @@ export const portalLiderRouter = router({
         .where(eq(scheduleAllocations.scheduleId, input));
 
       // Atualizar status do planejamento para validado
+      const sched = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input))
+        .limit(1);
+      const schedule = sched[0];
+
       await db
         .update(workSchedules)
         .set({ status: "validado" })
         .where(eq(workSchedules.id, input));
+
+      // Notificar admins sobre fechamento de presenca
+      const { notifyAttendanceClosed } = await import("../lib/sse-notifications");
+      notifyAttendanceClosed({
+        scheduleId: input,
+        clientName: schedule?.clientName || "Sem nome",
+        totalPeople: allocs.length,
+        leaderId: ctx.user.id,
+      });
 
       return { success: true };
     }),
@@ -689,8 +705,8 @@ export const portalLiderRouter = router({
         });
       }
 
-      // Criar solicitação
-      await db.insert(pixChangeRequests).values({
+      // Criar solicitacao
+      const result = await db.insert(pixChangeRequests).values({
         employeeId: input.employeeId,
         requestedByUserId: ctx.user.id,
         oldPixKey: emp.pixKey || null,
@@ -698,9 +714,18 @@ export const portalLiderRouter = router({
         status: "pendente",
       });
 
+      // Notificar admins sobre nova solicitacao PIX
+      const { notifyPixRequestCreated } = await import("../lib/sse-notifications");
+      notifyPixRequestCreated({
+        requestId: Number(result[0].insertId),
+        employeeName: emp.name,
+        newPixKey: input.newPixKey,
+        createdAt: new Date().toISOString(),
+      });
+
       return {
         success: true,
-        message: "Solicitação de alteração PIX enviada para aprovação",
+        message: "Solicitacao de alteracao PIX enviada para aprovacao",
       };
     }),
 
@@ -778,8 +803,16 @@ export const portalLiderRouter = router({
         });
       }
 
+      // Buscar dados do funcionario
+      const emps = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.id, request.employeeId))
+        .limit(1);
+      const emp = emps[0];
+
       if (input.approved) {
-        // Atualizar chave PIX do funcionário
+        // Atualizar chave PIX do funcionario
         await db
           .update(employees)
           .set({
@@ -787,7 +820,7 @@ export const portalLiderRouter = router({
           })
           .where(eq(employees.id, request.employeeId));
 
-        // Marcar solicitação como aprovada
+        // Marcar solicitacao como aprovada
         await db
           .update(pixChangeRequests)
           .set({
@@ -796,6 +829,17 @@ export const portalLiderRouter = router({
             reviewNotes: input.reviewNotes || null,
           })
           .where(eq(pixChangeRequests.id, input.requestId));
+
+        // Notificar lider sobre aprovacao
+        const { notifyPixRequestReviewed } = await import("../lib/sse-notifications");
+        notifyPixRequestReviewed({
+          requestId: input.requestId,
+          employeeName: emp?.name || "Funcionario",
+          status: "aprovado",
+          reviewedByUserId: ctx.user.id,
+          reviewNotes: input.reviewNotes,
+          reviewedAt: new Date().toISOString(),
+        });
       } else {
         // Rejeitar
         await db
@@ -806,6 +850,17 @@ export const portalLiderRouter = router({
             reviewNotes: input.reviewNotes || null,
           })
           .where(eq(pixChangeRequests.id, input.requestId));
+
+        // Notificar lider sobre rejeicao
+        const { notifyPixRequestReviewed } = await import("../lib/sse-notifications");
+        notifyPixRequestReviewed({
+          requestId: input.requestId,
+          employeeName: emp?.name || "Funcionario",
+          status: "rejeitado",
+          reviewedByUserId: ctx.user.id,
+          reviewNotes: input.reviewNotes,
+          reviewedAt: new Date().toISOString(),
+        });
       }
 
       return { success: true };

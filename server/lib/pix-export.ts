@@ -1,6 +1,6 @@
 import { getDb } from "../db";
 import { pixChangeRequests, employees, users } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
@@ -17,12 +17,28 @@ export async function exportPixHistoryExcel() {
       newPixKey: pixChangeRequests.newPixKey,
       status: pixChangeRequests.status,
       requestedByName: users.name,
+      requestedByUserId: pixChangeRequests.requestedByUserId,
       createdAt: pixChangeRequests.createdAt,
+      reviewedByUserId: pixChangeRequests.reviewedByUserId,
+      reviewedAt: pixChangeRequests.reviewedAt,
       reviewNotes: pixChangeRequests.reviewNotes,
     })
     .from(pixChangeRequests)
     .leftJoin(employees, eq(pixChangeRequests.employeeId, employees.id))
     .leftJoin(users, eq(pixChangeRequests.requestedByUserId, users.id));
+
+  // Buscar nomes dos revisores
+  const reviewerIds = Array.from(new Set(requests.map((r: any) => r.reviewedByUserId).filter(Boolean)));
+  const reviewers: Record<number, string> = {};
+  if (reviewerIds.length > 0) {
+    const reviewerUsers = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, reviewerIds as number[]));
+    reviewerUsers.forEach((u: any) => {
+      reviewers[u.id] = u.name;
+    });
+  }
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Histórico PIX");
@@ -36,7 +52,9 @@ export async function exportPixHistoryExcel() {
     { header: "Status", key: "status", width: 12 },
     { header: "Solicitado Por", key: "requestedByName", width: 15 },
     { header: "Data Solicitação", key: "createdAt", width: 18 },
-    { header: "Motivo", key: "reviewNotes", width: 30 },
+    { header: "Aprovado/Rejeitado Por", key: "reviewedByName", width: 20 },
+    { header: "Data Revisão", key: "reviewedAt", width: 18 },
+    { header: "Motivo/Observações", key: "reviewNotes", width: 30 },
   ];
 
   requests.forEach((req: any) => {
@@ -49,6 +67,8 @@ export async function exportPixHistoryExcel() {
       status: req.status,
       requestedByName: req.requestedByName,
       createdAt: req.createdAt ? new Date(req.createdAt).toLocaleDateString("pt-BR") : "—",
+      reviewedByName: req.reviewedByUserId ? reviewers[req.reviewedByUserId] || "—" : "—",
+      reviewedAt: req.reviewedAt ? new Date(req.reviewedAt).toLocaleDateString("pt-BR") : "—",
       reviewNotes: req.reviewNotes || "—",
     });
   });
@@ -72,12 +92,28 @@ export async function exportPixHistoryPdf() {
       newPixKey: pixChangeRequests.newPixKey,
       status: pixChangeRequests.status,
       requestedByName: users.name,
+      requestedByUserId: pixChangeRequests.requestedByUserId,
       createdAt: pixChangeRequests.createdAt,
+      reviewedByUserId: pixChangeRequests.reviewedByUserId,
+      reviewedAt: pixChangeRequests.reviewedAt,
       reviewNotes: pixChangeRequests.reviewNotes,
     })
     .from(pixChangeRequests)
     .leftJoin(employees, eq(pixChangeRequests.employeeId, employees.id))
     .leftJoin(users, eq(pixChangeRequests.requestedByUserId, users.id));
+
+  // Buscar nomes dos revisores
+  const reviewerIds = Array.from(new Set(requests.map((r: any) => r.reviewedByUserId).filter(Boolean)));
+  const reviewers: Record<number, string> = {};
+  if (reviewerIds.length > 0) {
+    const reviewerUsers = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, reviewerIds as number[]));
+    reviewerUsers.forEach((u: any) => {
+      reviewers[u.id] = u.name;
+    });
+  }
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ margin: 40 });

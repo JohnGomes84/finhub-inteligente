@@ -57,7 +57,23 @@ export function notifyPixRequestReviewed(data: {
 }
 
 /**
- * Notifica alocação duplicada detectada
+ * Notifica fechamento de presenca pelo lider
+ */
+export function notifyAttendanceClosed(data: {
+  scheduleId: number;
+  clientName: string;
+  totalPeople: number;
+  leaderId: number;
+}) {
+  broadcast({
+    type: "attendance_closed",
+    data,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Notifica alocacao duplicada detectada
  */
 export function notifyDuplicateAllocationDetected(data: {
   employeeId: number;

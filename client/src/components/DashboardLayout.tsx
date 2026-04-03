@@ -33,6 +33,8 @@ import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { useNotifications } from "@/hooks/useNotifications";
+import { Badge } from "./ui/badge";
 
 type MenuItem = {
   icon: any;
@@ -152,6 +154,28 @@ function DashboardLayoutContent({
   }, [visibleMenuItems]);
 
   const activeMenuItem = visibleMenuItems.find(item => item.path === location);
+  const [pixPendingCount, setPixPendingCount] = useState(0);
+
+  // Conectar ao stream de notificacoes
+  useNotifications((notification) => {
+    if (notification.type === "pix_request_created") {
+      setPixPendingCount(prev => prev + 1);
+    } else if (notification.type === "pix_request_reviewed") {
+      setPixPendingCount(prev => Math.max(0, prev - 1));
+    }
+  });
+
+  // Buscar contagem inicial de PIX pendentes
+  const { data: pixRequests } = trpc.portalLider.listPixRequests.useQuery(
+    { status: "pendente" },
+    { enabled: user?.role === "admin" }
+  );
+
+  useEffect(() => {
+    if (pixRequests) {
+      setPixPendingCount(pixRequests.length);
+    }
+  }, [pixRequests]);
 
   useEffect(() => {
     if (isCollapsed) setIsResizing(false);
@@ -218,6 +242,7 @@ function DashboardLayoutContent({
                 <SidebarMenu className="px-2">
                   {items.map(item => {
                     const isActive = location === item.path;
+                    const showBadge = item.path === "/pix-approvals" && pixPendingCount > 0;
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
@@ -229,7 +254,12 @@ function DashboardLayoutContent({
                           }`}
                         >
                           <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
-                          <span>{item.label}</span>
+                          <span className="flex-1">{item.label}</span>
+                          {showBadge && (
+                            <Badge variant="destructive" className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs font-bold">
+                              {pixPendingCount}
+                            </Badge>
+                          )}
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
