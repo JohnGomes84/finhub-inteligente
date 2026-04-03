@@ -23,6 +23,7 @@ export default function PortalLiderPage() {
   const [activeTab, setActiveTab] = useState("hoje");
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
   const [partialHours, setPartialHours] = useState<{ [key: number]: string }>({});
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   // Cadastro Rápido
   const [quickRegName, setQuickRegName] = useState("");
@@ -50,6 +51,11 @@ export default function PortalLiderPage() {
   // Dados
   const { data: mySchedules, isLoading: schedulesLoading } = trpc.portalLider.mySchedules.useQuery();
   const { data: schedule, isLoading: scheduleLoading } = trpc.portalLider.getScheduleDetail.useQuery(
+    selectedScheduleId || 0,
+    { enabled: !!selectedScheduleId }
+  );
+
+  const { data: expenses } = trpc.portalLider.listExpensesForSchedule.useQuery(
     selectedScheduleId || 0,
     { enabled: !!selectedScheduleId }
   );
@@ -97,6 +103,36 @@ export default function PortalLiderPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const allocateNewEmployeeMut = trpc.portalLider.allocateNewEmployee.useMutation({
+    onSuccess: () => {
+      toast.success("Funcionario alocado!");
+      utils.portalLider.getScheduleDetail.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const quickExpenseMut = trpc.portalLider.quickExpense.useMutation({
+    onSuccess: () => {
+      toast.success("Lançamento salvo!");
+      setQuickExpenseCpf("");
+      setQuickExpenseValue("");
+      utils.portalLider.listExpensesForSchedule.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const closeAttendanceMut = trpc.portalLider.closeAttendance.useMutation({
+    onSuccess: () => {
+      toast.success("Presença fechada com sucesso!");
+      utils.portalLider.getScheduleDetail.invalidate();
+      utils.portalLider.mySchedules.invalidate();
+      setCloseConfirmOpen(false);
+      setSelectedScheduleId(null);
+      setActiveTab("hoje");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const requestPixChangeMut = trpc.portalLider.requestPixChange.useMutation({
     onSuccess: () => {
       toast.success("Solicitação enviada!");
@@ -120,7 +156,12 @@ export default function PortalLiderPage() {
       toast.error(`Marque presença de todos os ${unmarked.length} diarista(s) antes de fechar`);
       return;
     }
-    checkOutMut.mutate({ scheduleId: selectedScheduleId, allocationId: 0 });
+    setCloseConfirmOpen(true);
+  };
+
+  const handleConfirmClose = () => {
+    if (!selectedScheduleId) return;
+    closeAttendanceMut.mutate(selectedScheduleId);
   };
 
   const handlePresenceChange = (allocId: number, status: "presente" | "faltou" | "parcial", hours?: string) => {
@@ -165,6 +206,19 @@ export default function PortalLiderPage() {
     });
   };
 
+  const handleQuickExpense = async () => {
+    if (!quickExpenseCpf || !quickExpenseValue || !selectedScheduleId) {
+      toast.error("Preencha CPF e valor");
+      return;
+    }
+    await quickExpenseMut.mutateAsync({
+      scheduleId: selectedScheduleId,
+      cpf: quickExpenseCpf,
+      type: quickExpenseType,
+      value: parseFloat(quickExpenseValue),
+    });
+  };
+
   const handlePixChange = async () => {
     if (!pixChangeCpf || !newPixKey) {
       toast.error("Preencha CPF e nova chave PIX");
@@ -192,6 +246,8 @@ export default function PortalLiderPage() {
     if (!schedule?.allocations) return 0;
     return schedule.allocations.filter((a: any) => a.attendanceStatus).length;
   }, [schedule]);
+
+  const isClosed = schedule?.status === "validado";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 md:p-6">
@@ -248,23 +304,24 @@ export default function PortalLiderPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="font-bold text-white text-lg">{sched.clientName}</div>
-                          <div className="text-sm text-slate-400 mt-1">{sched.shiftName} • {sched.startTime}-{sched.endTime}</div>
-                          <div className="text-xs text-slate-500 mt-1">{sched.location} • {sched.totalPeople} diaristas</div>
+                          <div className="text-sm text-slate-400 mt-1">{sched.shiftName}</div>
+                          <div className="text-xs text-slate-500 mt-1">{sched.totalPeople} diaristas</div>
                         </div>
                         <div className="text-right">
-                          <Badge className="text-xs">{sched.status === "validado" ? "Validado" : "Pendente"}</Badge>
+                          <Badge className={`text-xs ${sched.status === "validado" ? "bg-green-600" : "bg-yellow-600"}`}>
+                            {sched.status === "validado" ? "Fechado" : "Aberto"}
+                          </Badge>
                         </div>
                       </div>
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedScheduleId(sched.id);
                           handleCheckIn();
                         }}
-                        disabled={checkInMut.isPending || sched.checkInTime}
+                        disabled={checkInMut.isPending || sched.status === "validado"}
                         className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white h-12 text-base font-semibold"
                       >
-                        {sched.checkInTime ? "✓ Iniciado" : "Iniciar"}
+                        {sched.status === "validado" ? "✓ Fechado" : "Iniciar"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -287,6 +344,14 @@ export default function PortalLiderPage() {
               </div>
             ) : schedule ? (
               <div className="space-y-3">
+                {isClosed && (
+                  <Card className="bg-green-900/30 border-green-700">
+                    <CardContent className="p-3 text-sm text-green-300">
+                      ✓ Presença fechada. Não é possível fazer alterações.
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Contador */}
                 <Card className="bg-blue-900/30 border-blue-700">
                   <CardContent className="p-4 flex items-center justify-between">
@@ -305,7 +370,7 @@ export default function PortalLiderPage() {
                 {/* Lista de Diaristas */}
                 <div className="space-y-2">
                   {schedule.allocations?.map((alloc: any) => {
-                    const shiftHours = 8; // Padrão 8 horas
+                    const shiftHours = 8;
                     const partialHour = parseFloat(partialHours[alloc.id] || "0");
                     const partialPayValue = partialHour > 0 ? (parseFloat(alloc.payValue) * partialHour / shiftHours).toFixed(2) : "0";
 
@@ -341,71 +406,66 @@ export default function PortalLiderPage() {
                           </div>
 
                           {/* Botões Presença */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <Button
-                              onClick={() => handlePresenceChange(alloc.id, "presente")}
-                              variant={alloc.attendanceStatus === "presente" ? "default" : "outline"}
-                              disabled={setAttendanceMut.isPending}
-                              className="h-12 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              Presente
-                            </Button>
-                            <Button
-                              onClick={() => handlePresenceChange(alloc.id, "faltou")}
-                              variant={alloc.attendanceStatus === "faltou" ? "default" : "outline"}
-                              disabled={setAttendanceMut.isPending}
-                              className="h-12 text-sm font-semibold bg-red-600 hover:bg-red-700 text-white"
-                            >
-                              Faltou
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                if (alloc.attendanceStatus !== "parcial") {
-                                  handlePresenceChange(alloc.id, "parcial", "4");
-                                  setPartialHours({ ...partialHours, [alloc.id]: "4" });
-                                }
-                              }}
-                              variant={alloc.attendanceStatus === "parcial" ? "default" : "outline"}
-                              disabled={setAttendanceMut.isPending}
-                              className="h-12 text-sm font-semibold bg-yellow-600 hover:bg-yellow-700 text-white"
-                            >
-                              Parcial
-                            </Button>
-                          </div>
-
-                          {/* Horas Parciais */}
-                          {alloc.attendanceStatus === "parcial" && (
-                            <div className="bg-slate-700 p-3 rounded space-y-2">
-                              <Label className="text-xs text-slate-300">Horas trabalhadas (0.5 a {shiftHours})</Label>
-                              <div className="flex gap-2 items-center">
-                                <Input
-                                  type="number"
-                                  min="0.5"
-                                  max={shiftHours}
-                                  step="0.5"
-                                  value={partialHours[alloc.id] || shiftHours / 2}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setPartialHours({ ...partialHours, [alloc.id]: val });
-                                    handlePresenceChange(alloc.id, "parcial", val);
+                          {!isClosed && (
+                            <>
+                              <div className="grid grid-cols-3 gap-2">
+                                <Button
+                                  onClick={() => handlePresenceChange(alloc.id, "presente")}
+                                  variant={alloc.attendanceStatus === "presente" ? "default" : "outline"}
+                                  disabled={setAttendanceMut.isPending}
+                                  className="h-12 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  Presente
+                                </Button>
+                                <Button
+                                  onClick={() => handlePresenceChange(alloc.id, "faltou")}
+                                  variant={alloc.attendanceStatus === "faltou" ? "default" : "outline"}
+                                  disabled={setAttendanceMut.isPending}
+                                  className="h-12 text-sm font-semibold bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                  Faltou
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    if (alloc.attendanceStatus !== "parcial") {
+                                      handlePresenceChange(alloc.id, "parcial", "4");
+                                      setPartialHours({ ...partialHours, [alloc.id]: "4" });
+                                    }
                                   }}
-                                  className="flex-1 bg-slate-600 border-slate-500 text-white text-sm h-10"
-                                />
-                                <div className="text-sm font-semibold text-green-400">{BRL(partialPayValue)}</div>
+                                  variant={alloc.attendanceStatus === "parcial" ? "default" : "outline"}
+                                  disabled={setAttendanceMut.isPending}
+                                  className="h-12 text-sm font-semibold bg-yellow-600 hover:bg-yellow-700 text-white"
+                                >
+                                  Parcial
+                                </Button>
                               </div>
-                              <div className="text-xs text-slate-400">
-                                {partialHour}h de {shiftHours}h = {BRL(partialPayValue)}
-                              </div>
-                            </div>
-                          )}
 
-                          {/* Observação */}
-                          {alloc.attendanceStatus && (
-                            <Input
-                              placeholder="Observação (opcional)"
-                              className="bg-slate-700 border-slate-600 text-white text-xs h-9"
-                              defaultValue={alloc.notes || ""}
-                            />
+                              {/* Horas Parciais */}
+                              {alloc.attendanceStatus === "parcial" && (
+                                <div className="bg-slate-700 p-3 rounded space-y-2">
+                                  <Label className="text-xs text-slate-300">Horas trabalhadas (0.5 a {shiftHours})</Label>
+                                  <div className="flex gap-2 items-center">
+                                    <Input
+                                      type="number"
+                                      min="0.5"
+                                      max={shiftHours}
+                                      step="0.5"
+                                      value={partialHours[alloc.id] || shiftHours / 2}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPartialHours({ ...partialHours, [alloc.id]: val });
+                                        handlePresenceChange(alloc.id, "parcial", val);
+                                      }}
+                                      className="flex-1 bg-slate-600 border-slate-500 text-white text-sm h-10"
+                                    />
+                                    <div className="text-sm font-semibold text-green-400">{BRL(partialPayValue)}</div>
+                                  </div>
+                                  <div className="text-xs text-slate-400">
+                                    {partialHour}h de {shiftHours}h = {BRL(partialPayValue)}
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </CardContent>
                       </Card>
@@ -414,13 +474,15 @@ export default function PortalLiderPage() {
                 </div>
 
                 {/* Botão Fechar */}
-                <Button
-                  onClick={handleCheckOut}
-                  disabled={checkOutMut.isPending || markedCount < (schedule?.allocations?.length || 0)}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold"
-                >
-                  {checkOutMut.isPending ? "Fechando..." : "Fechar Presença"}
-                </Button>
+                {!isClosed && (
+                  <Button
+                    onClick={handleCheckOut}
+                    disabled={closeAttendanceMut.isPending || markedCount < (schedule?.allocations?.length || 0)}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold"
+                  >
+                    {closeAttendanceMut.isPending ? "Fechando..." : "Fechar Presença"}
+                  </Button>
+                )}
               </div>
             ) : null}
           </TabsContent>
@@ -438,6 +500,7 @@ export default function PortalLiderPage() {
                     placeholder="000.000.000-00"
                     value={quickExpenseCpf}
                     onChange={(e) => setQuickExpenseCpf(e.target.value)}
+                    disabled={!selectedScheduleId}
                     className="mt-2 bg-slate-700 border-slate-600 text-white text-sm h-10"
                   />
                 </div>
@@ -446,6 +509,7 @@ export default function PortalLiderPage() {
                   <select
                     value={quickExpenseType}
                     onChange={(e) => setQuickExpenseType(e.target.value as any)}
+                    disabled={!selectedScheduleId}
                     className="w-full mt-2 bg-slate-700 border border-slate-600 text-white text-sm rounded px-3 py-2 h-10"
                   >
                     <option value="vale">Vale</option>
@@ -460,14 +524,44 @@ export default function PortalLiderPage() {
                     placeholder="0.00"
                     value={quickExpenseValue}
                     onChange={(e) => setQuickExpenseValue(e.target.value)}
+                    disabled={!selectedScheduleId}
                     className="mt-2 bg-slate-700 border-slate-600 text-white text-sm h-10"
                   />
                 </div>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-semibold">
+                <Button
+                  onClick={handleQuickExpense}
+                  disabled={quickExpenseMut.isPending || !selectedScheduleId}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-semibold"
+                >
                   <Plus className="h-4 w-4 mr-2" /> Lançar
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Histórico de Lançamentos */}
+            {expenses && expenses.length > 0 && (
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white text-sm">Histórico do Dia</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {expenses.map((exp: any) => (
+                    <div key={exp.id} className="flex items-center justify-between p-2 bg-slate-700 rounded text-xs">
+                      <div>
+                        <div className="font-semibold text-white">{exp.employeeName}</div>
+                        <div className="text-slate-400">{exp.employeeCpf}</div>
+                      </div>
+                      <div className="text-right">
+                        {exp.voucher > 0 && <div className="text-slate-300">Vale: {BRL(exp.voucher)}</div>}
+                        {exp.bonus > 0 && <div className="text-slate-300">Bônus: {BRL(exp.bonus)}</div>}
+                        {exp.mealAllowance > 0 && <div className="text-slate-300">Marmita: {BRL(exp.mealAllowance)}</div>}
+                        <div className="font-semibold text-green-400 mt-1">Total: {BRL(exp.total)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ABA MAIS */}
@@ -570,6 +664,26 @@ export default function PortalLiderPage() {
                     >
                       {quickRegisterMut.isPending ? "Cadastrando..." : "Cadastrar"}
                     </Button>
+                    {quickRegisterMut.isSuccess && selectedScheduleId && (
+                      <Button
+                        onClick={() => {
+                          const newEmpId = quickRegisterMut.data?.id;
+                          if (newEmpId) {
+                            allocateNewEmployeeMut.mutate({
+                              scheduleId: selectedScheduleId,
+                              employeeId: newEmpId,
+                              jobFunctionId: 1,
+                              payValue: 100,
+                              receiveValue: 150,
+                            });
+                          }
+                        }}
+                        disabled={allocateNewEmployeeMut.isPending}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm font-semibold"
+                      >
+                        {allocateNewEmployeeMut.isPending ? "Alocando..." : "Alocar no Planejamento"}
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -607,6 +721,46 @@ export default function PortalLiderPage() {
             </Tabs>
           </TabsContent>
         </Tabs>
+
+        {/* Dialog: Confirmar Fechamento */}
+        <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+          <DialogContent className="bg-slate-800 border-slate-700">
+            <DialogHeader>
+              <DialogTitle className="text-white">Confirmar Fechamento de Presença</DialogTitle>
+            </DialogHeader>
+            {schedule && (
+              <div className="space-y-3">
+                <div className="bg-slate-700 p-3 rounded text-sm space-y-1">
+                  <div className="text-slate-300">
+                    Presentes: <span className="font-semibold text-green-400">{schedule.allocations?.filter((a: any) => a.attendanceStatus === "presente").length || 0}</span>
+                  </div>
+                  <div className="text-slate-300">
+                    Faltaram: <span className="font-semibold text-red-400">{schedule.allocations?.filter((a: any) => a.attendanceStatus === "faltou").length || 0}</span>
+                  </div>
+                  <div className="text-slate-300">
+                    Parciais: <span className="font-semibold text-yellow-400">{schedule.allocations?.filter((a: any) => a.attendanceStatus === "parcial").length || 0}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCloseConfirmOpen(false)}
+                className="text-slate-300"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmClose}
+                disabled={closeAttendanceMut.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {closeAttendanceMut.isPending ? "Fechando..." : "Confirmar Fechamento"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

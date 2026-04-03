@@ -7,6 +7,7 @@ import { financeiroRouter } from "./routers/financeiro";
 import { usuariosRouter } from "./routers/usuarios";
 import { planejamentosRouter } from "./routers/planejamentos";
 import { portalLiderRouter } from "./routers/portalLider";
+import { qrcodeRouter } from "./routers/qrcode";
 
 export const appRouter = router({
   system: systemRouter,
@@ -31,8 +32,11 @@ export const appRouter = router({
   // Gestão de Usuários e Permissões
   usuarios: usuariosRouter,
 
-  // Portal do Líder
+  // Portal do Lider
   portalLider: portalLiderRouter,
+
+  // QR Code
+  qrcode: qrcodeRouter,
 });
 
 export type AppRouter = typeof appRouter;

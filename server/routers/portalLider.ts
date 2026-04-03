@@ -400,6 +400,240 @@ export const portalLiderRouter = router({
       return { id: Number(result[0].insertId), name: input.name };
     }),
 
+  // ============ LANCAMENTO RAPIDO DE VALE/BONUS/MARMITA ============
+  quickExpense: protectedProcedure
+    .input(
+      z.object({
+        scheduleId: z.number(),
+        cpf: z.string(),
+        type: z.enum(["vale", "bonus", "marmita"]),
+        value: z.number().positive(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      // Buscar funcionario por CPF
+      const [emp] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.cpf, input.cpf))
+        .limit(1);
+      if (!emp) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Funcionario nao encontrado",
+        });
+      }
+
+      // Buscar alocacao do funcionario no planejamento
+      const allocs = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(
+          and(
+            eq(scheduleAllocations.scheduleId, input.scheduleId),
+            eq(scheduleAllocations.employeeId, emp.id)
+          )
+        )
+        .limit(1);
+      const alloc = allocs[0];
+      if (!alloc) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Funcionario nao esta alocado neste planejamento",
+        });
+      }
+
+      // Atualizar campo correspondente
+      const updateData: any = {};
+      if (input.type === "vale") updateData.voucher = input.value;
+      else if (input.type === "bonus") updateData.bonus = input.value;
+      else if (input.type === "marmita") updateData.mealAllowance = input.value;
+
+      await db
+        .update(scheduleAllocations)
+        .set(updateData)
+        .where(eq(scheduleAllocations.id, alloc.id));
+
+      return { success: true, allocationId: alloc.id };
+    }),
+
+  // ============ LISTAR LANCAMENTOS DO DIA ============
+  listExpensesForSchedule: protectedProcedure
+    .input(z.number())
+    .query(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) return [];
+
+      const allocs = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.scheduleId, input));
+
+      // Enriquecer com dados do funcionario
+      const empIds = Array.from(new Set(allocs.map(a => a.employeeId)));
+      const empMap: Record<number, any> = {};
+      if (empIds.length > 0) {
+        const emps = await db
+          .select()
+          .from(employees)
+          .where(inArray(employees.id, empIds));
+        emps.forEach(e => {
+          empMap[e.id] = e;
+        });
+      }
+
+      return allocs
+        .filter(a => a.voucher || a.bonus || a.mealAllowance)
+        .map(a => ({
+          id: a.id,
+          employeeName: empMap[a.employeeId]?.name || "—",
+          employeeCpf: empMap[a.employeeId]?.cpf || "",
+          voucher: a.voucher,
+          bonus: a.bonus,
+          mealAllowance: a.mealAllowance,
+          total: (parseFloat(String(a.voucher || 0)) + parseFloat(String(a.bonus || 0)) + parseFloat(String(a.mealAllowance || 0))).toFixed(2),
+        }));
+    }),
+
+  // ============ FECHAR PRESENCA E CHECK-OUT ============
+  closeAttendance: protectedProcedure
+    .input(z.number())
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Buscar todas as alocacoes
+      const allocs = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(eq(scheduleAllocations.scheduleId, input));
+
+      // Verificar se todos tem presenca marcada
+      const unmarked = allocs.filter(a => !a.attendanceStatus);
+      if (unmarked.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nem todos os diaristas tem presenca marcada",
+        });
+      }
+
+      // Atualizar checkOutTime para todos
+      await db
+        .update(scheduleAllocations)
+        .set({ checkOutTime: new Date() })
+        .where(eq(scheduleAllocations.scheduleId, input));
+
+      // Atualizar status do planejamento para validado
+      await db
+        .update(workSchedules)
+        .set({ status: "validado" })
+        .where(eq(workSchedules.id, input));
+
+      return { success: true };
+    }),
+
+  // ============ ALOCAR FUNCIONARIO RECÉM-CADASTRADO ============
+  allocateNewEmployee: protectedProcedure
+    .input(
+      z.object({
+        scheduleId: z.number(),
+        employeeId: z.number(),
+        jobFunctionId: z.number(),
+        payValue: z.number(),
+        receiveValue: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isLeader = await isLeaderOfSchedule(ctx.user.id, input.scheduleId);
+      if (!isLeader) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Voce nao e o lider deste planejamento",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Verificar se ja existe alocacao
+      const existing = await db
+        .select()
+        .from(scheduleAllocations)
+        .where(
+          and(
+            eq(scheduleAllocations.scheduleId, input.scheduleId),
+            eq(scheduleAllocations.employeeId, input.employeeId)
+          )
+        )
+        .limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Funcionario ja esta alocado neste planejamento",
+        });
+      }
+
+      // Buscar ou criar schedule_function
+      const funcs = await db
+        .select()
+        .from(scheduleFunctions)
+        .where(
+          and(
+            eq(scheduleFunctions.scheduleId, input.scheduleId),
+            eq(scheduleFunctions.jobFunctionId, input.jobFunctionId)
+          )
+        )
+        .limit(1);
+      let funcId = funcs[0]?.id;
+      if (!funcId) {
+        const result = await db.insert(scheduleFunctions).values({
+          scheduleId: input.scheduleId,
+          jobFunctionId: input.jobFunctionId,
+          payValue: input.payValue,
+          receiveValue: input.receiveValue,
+        });
+        funcId = Number(result[0].insertId);
+      }
+
+      // Criar alocacao
+      const result = await db.insert(scheduleAllocations).values({
+        scheduleId: input.scheduleId,
+        scheduleFunctionId: funcId,
+        employeeId: input.employeeId,
+        payValue: input.payValue,
+        receiveValue: input.receiveValue,
+      });
+
+      return { success: true, allocationId: Number(result[0].insertId) };
+    }),
+
   // ============ SOLICITAR ALTERACAO DE PIX ============
   requestPixChange: protectedProcedure
     .input(
