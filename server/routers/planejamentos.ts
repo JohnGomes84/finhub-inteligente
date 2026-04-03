@@ -81,6 +81,101 @@ async function getScheduleOrThrow(scheduleId: number) {
 }
 
 export const planejamentosRouter = router({
+  // ============ ALOCACAO HIBRIDA (VALIDACAO DE DUPLICIDADE) ============
+  validateDuplicate: protectedProcedure
+    .input(
+      z.object({
+        scheduleId: z.number(),
+        employeeId: z.number(),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [schedule] = await db
+        .select()
+        .from(workSchedules)
+        .where(eq(workSchedules.id, input.scheduleId))
+        .limit(1);
+
+      if (!schedule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Planejamento nao encontrado",
+        });
+      }
+
+      // Buscar alocacoes do mesmo funcionario no mesmo dia em outros planejamentos
+      const conflictingAllocations = await db
+        .select({
+          scheduleId: scheduleAllocations.scheduleId,
+          clientId: workSchedules.clientId,
+          shiftId: workSchedules.shiftId,
+          status: workSchedules.status,
+        })
+        .from(scheduleAllocations)
+        .innerJoin(workSchedules, eq(scheduleAllocations.scheduleId, workSchedules.id))
+        .where(
+          and(
+            eq(scheduleAllocations.employeeId, input.employeeId),
+            eq(workSchedules.date, schedule.date),
+            ne(workSchedules.id, input.scheduleId)
+          )
+        );
+
+      if (conflictingAllocations.length > 0) {
+        return {
+          hasDuplicate: true,
+          conflicts: conflictingAllocations,
+        };
+      }
+
+      return { hasDuplicate: false, conflicts: [] };
+    }),
+
+  allocateWithException: protectedProcedure
+    .input(
+      z.object({
+        scheduleFunctionId: z.number(),
+        scheduleId: z.number(),
+        employeeId: z.number(),
+        justification: z.string().min(10, "Justificativa deve ter no minimo 10 caracteres"),
+        payValue: z.string(),
+        receiveValue: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Registrar na auditoria
+      await db.insert(auditLog).values({
+        userId: ctx.user.id,
+        action: "duplicate_allocation_exception",
+        module: "schedules",
+        details: JSON.stringify({
+          scheduleId: input.scheduleId,
+          employeeId: input.employeeId,
+          justification: input.justification,
+        }),
+        createdAt: new Date(),
+      });
+
+      // Criar alocacao
+      const [result] = await db.insert(scheduleAllocations).values({
+        scheduleFunctionId: input.scheduleFunctionId,
+        scheduleId: input.scheduleId,
+        employeeId: input.employeeId,
+        payValue: input.payValue,
+        receiveValue: input.receiveValue,
+        mealAllowance: "0",
+        voucher: "0",
+        bonus: "0",
+      });
+
+      return { success: true, allocationId: result.insertId };
+    }),
   // ============ LISTAGEM COM FILTROS ============
   list: protectedProcedure
     .input(
@@ -950,6 +1045,17 @@ export const planejamentosRouter = router({
         (sum, a) => sum + parseFloat(String(a.bonus || "0")),
         0
       );
+      const totalPayValue = allocs.reduce(
+        (sum, a) => sum + parseFloat(String(a.payValue || "0")),
+        0
+      );
+      const totalReceiveValue = allocs.reduce(
+        (sum, a) => sum + parseFloat(String(a.receiveValue || "0")),
+        0
+      );
+      const totalCost = totalPayValue + totalMealAllowance + totalVoucher + totalBonus;
+      const margin = totalReceiveValue - totalCost;
+      const marginPercent = totalReceiveValue > 0 ? ((margin / totalReceiveValue) * 100).toFixed(2) : "0";
 
       return {
         ...schedule,
@@ -957,6 +1063,11 @@ export const planejamentosRouter = router({
         totalMealAllowance: totalMealAllowance.toFixed(2),
         totalVoucher: totalVoucher.toFixed(2),
         totalBonus: totalBonus.toFixed(2),
+        totalPayValue: totalPayValue.toFixed(2),
+        totalReceiveValue: totalReceiveValue.toFixed(2),
+        totalCost: totalCost.toFixed(2),
+        margin: margin.toFixed(2),
+        marginPercent,
         allocations: allocs.map(a => ({
           ...a,
           employeeName: empMap[a.employeeId]?.name || "—",
