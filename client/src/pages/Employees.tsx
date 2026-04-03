@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/hooks/usePermissions";
 import CrudPage, { type FieldDef } from "@/components/CrudPage";
+import { ImportExcel } from "@/components/ImportExcel";
 import { Users, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -39,6 +40,40 @@ export default function EmployeesPage() {
   const updateMut = trpc.cadastros.employees.update.useMutation({ onSuccess: () => utils.cadastros.employees.list.invalidate() });
   const deleteMut = trpc.cadastros.employees.delete.useMutation({ onSuccess: () => utils.cadastros.employees.list.invalidate() });
 
+  const handleImportEmployees = async (data: any[]) => {
+    const results = { success: 0, errors: [] as { row: number; error: string }[] };
+    for (const row of data) {
+      try {
+        if (!row.name || !row.cpf) {
+          results.errors.push({ row: row._rowNumber, error: "Nome e CPF sao obrigatorios" });
+          continue;
+        }
+        await createMut.mutateAsync(row);
+        results.success++;
+      } catch (err: any) {
+        results.errors.push({ row: row._rowNumber, error: err.message || "Erro ao criar registro" });
+      }
+    }
+    return results;
+  };
+
+  const importButton = (
+    <ImportExcel
+      title="Importar Funcionarios"
+      templateColumns={[
+        { key: "name", label: "Nome" },
+        { key: "cpf", label: "CPF" },
+        { key: "email", label: "E-mail" },
+        { key: "phone", label: "Telefone" },
+        { key: "city", label: "Cidade" },
+        { key: "pixKey", label: "Chave PIX" },
+        { key: "status", label: "Status" },
+        { key: "notes", label: "Observacoes" },
+      ]}
+      onImport={handleImportEmployees}
+      fileName="funcionarios"
+    />
+  );
 
   return (
     <CrudPage
@@ -55,7 +90,7 @@ export default function EmployeesPage() {
       onUpdate={async (d) => { await updateMut.mutateAsync(d); }}
       onDelete={async (id) => { await deleteMut.mutateAsync(id); }}
       searchPlaceholder="Buscar por nome, CPF ou cidade..."
-
+      headerExtra={importButton}
     />
   );
 }

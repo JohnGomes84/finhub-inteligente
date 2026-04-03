@@ -418,28 +418,8 @@ export const planejamentosRouter = router({
         });
         const newFuncId = Number(newFunc.insertId);
 
-        // Copiar alocações da função
-        const allocs = await db
-          .select()
-          .from(scheduleAllocations)
-          .where(
-            and(
-              eq(scheduleAllocations.scheduleFunctionId, f.id),
-              ne(workSchedules.id, input.scheduleId)
-            )
-          );
-        for (const a of allocs) {
-          await db.insert(scheduleAllocations).values({
-            scheduleFunctionId: newFuncId,
-            scheduleId: newScheduleId,
-            employeeId: a.employeeId,
-            payValue: a.payValue,
-            receiveValue: a.receiveValue,
-            mealAllowance: a.mealAllowance,
-            voucher: a.voucher,
-            bonus: a.bonus,
-          });
-        }
+        // NÃO copiar alocações de diaristas (apenas funções e valores)
+        // As alocações devem ser feitas manualmente no novo planejamento
       }
 
       await recalcScheduleTotals(newScheduleId);
