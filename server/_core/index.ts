@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerExportRoutes } from "../routers/exportRoutes";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { registerSSESubscriber } from "../lib/sse-notifications";
 import { serveStatic, setupVite } from "./vite";
 import {
   createRateLimitMiddleware,
@@ -54,6 +55,16 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Export routes (Excel/PDF) under /api/reports/*
   registerExportRoutes(app);
+  // SSE notifications under /api/notifications/stream
+  app.get("/api/notifications/stream", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const userId = (req as any).user?.id || 0;
+    registerSSESubscriber(res, userId);
+    res.write(`:connected\n\n`);
+  });
   // tRPC API
   app.use(
     "/api/trpc",

@@ -1,9 +1,11 @@
-import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DollarSign, TrendingUp, TrendingDown, Users, Building2,
   CreditCard, Receipt, AlertTriangle,
 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useState } from "react";
+import { KpiCard as KpiCardNew, MonthNavigator, FinancialEvolutionChart } from "@/components/dashboard-components";
 
 function formatCurrency(value: string | number) {
   const num = typeof value === "string" ? parseFloat(value) : value;

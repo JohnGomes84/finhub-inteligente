@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
+import { notifyPixRequestCreated, notifyPixRequestReviewed } from "../lib/sse-notifications";
 
 // Helper: verificar se usuário é líder de um planejamento
 async function isLeaderOfSchedule(

@@ -172,3 +172,14 @@
 - [x] Integração com backend (reviewPixRequest)
 - [x] Auditoria: registrar quem aprovou/rejeitou e quando
 - [ ] Testes de aprovação/rejeição
+
+## Fase 12: Melhorias v2 (Trava, SSE, Dashboard, Presenca Parcial)
+- [x] Trava anti-duplicidade: validar alocacao duplicada no mesmo dia
+- [x] Excecao com justificativa obrigatoria (minimo 10 chars)
+- [x] SSE notifications: rota GET /api/notifications/stream
+- [x] Notificar admins quando PIX criado/revisado
+- [x] Dashboard components: KpiCard, MonthNavigator, FinancialEvolutionChart
+- [x] Migration 0002_partial_hours.sql para horas parciais
+- [x] Controle presenca parcial com campo de horas
+- [x] Calculo partial_pay_value = payValue * partialHours / totalShiftHours
+- [x] Build validado sem erros
