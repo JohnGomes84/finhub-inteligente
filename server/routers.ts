@@ -8,6 +8,7 @@ import { usuariosRouter } from "./routers/usuarios";
 import { planejamentosRouter } from "./routers/planejamentos";
 import { portalLiderRouter } from "./routers/portalLider";
 import { qrcodeRouter } from "./routers/qrcode";
+import { relatoriosRouter } from "./routers/relatorios";
 
 export const appRouter = router({
   system: systemRouter,
@@ -37,6 +38,9 @@ export const appRouter = router({
 
   // QR Code
   qrcode: qrcodeRouter,
+
+  // Relatórios
+  relatorios: relatoriosRouter,
 });
 
 export type AppRouter = typeof appRouter;

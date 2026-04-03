@@ -441,3 +441,19 @@ export const pixChangeRequests = mysqlTable("pix_change_requests", {
 
 export type PixChangeRequest = typeof pixChangeRequests.$inferSelect;
 export type InsertPixChangeRequest = typeof pixChangeRequests.$inferInsert;
+
+// ============================================================
+// TEMPLATES DE RELATORIOS
+// ============================================================
+/** Templates de relatórios salvos pelos usuários */
+export const reportTemplates = mysqlTable("report_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  filters: longtext("filters").notNull(), // JSON com filtros
+  sections: longtext("sections").notNull(), // JSON com seções selecionadas
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ReportTemplate = typeof reportTemplates.$inferSelect;
+export type InsertReportTemplate = typeof reportTemplates.$inferInsert;
