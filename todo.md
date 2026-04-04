@@ -183,3 +183,19 @@
 - [x] Controle presenca parcial com campo de horas
 - [x] Calculo partial_pay_value = payValue * partialHours / totalShiftHours
 - [x] Build validado sem erros
+
+
+## Fase 13: Redesenho Completo do Portal do Líder (Ferramenta de Gestão)
+- [ ] Aba "Hoje": Criar nova operação (empresa → local → turno → data)
+- [ ] Validação de duplicação (bloquear mesma empresa + local + turno + data)
+- [ ] Inserir diaristas: CPF → buscar/criar → pedir todos dados → confirmar
+- [ ] Editar/remover diaristas até finalizar operação
+- [ ] Aba "Presença": Listar operações do dia
+- [ ] Marcar presença (Presente/Faltou/Parcial com horas)
+- [ ] Registrar hora chegada/saída com cálculo automático
+- [ ] Lançar observações (acidente, quebra, saída antecipada)
+- [ ] Adicionar/remover diaristas até finalizar
+- [ ] Botão "Finalizar Operação" (bloqueia edições sem ADM)
+- [ ] Aba "Vale": Lançar vale/marmita por diarista (bônus apenas no Planejamento/ADM)
+- [ ] Aba "Mais": Alteração PIX, Cadastro rápido, Histórico
+- [ ] Testes de fluxo completo
