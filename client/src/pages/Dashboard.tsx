@@ -28,7 +28,7 @@ export default function Dashboard() {
           </h1>
           <p className="text-muted-foreground text-sm mt-2">Visão geral financeira em tempo real</p>
         </div>
-        <MonthNavigator selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+        <MonthNavigator currentMonth={selectedMonth} onPreviousMonth={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1))} onNextMonth={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1))} />
       </div>
 
       {/* KPI Cards - Premium Grid */}
