@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { usePixNotifications } from "@/hooks/usePixNotifications";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
@@ -212,6 +213,7 @@ function MenuItemComponent({ item }: { item: MenuItem }) {
   const [location] = useLocation();
   const isActive = location === item.path;
   const Icon = item.icon;
+  const { pendingCount } = item.path === "/pix-approvals" ? usePixNotifications() : { pendingCount: 0 };
 
   return (
     <SidebarMenuItem>
@@ -227,6 +229,11 @@ function MenuItemComponent({ item }: { item: MenuItem }) {
         <a href={item.path} className="flex items-center gap-3 px-3 py-2.5">
           <Icon className="h-5 w-5 flex-shrink-0" />
           <span className="text-sm">{item.label}</span>
+          {item.path === "/pix-approvals" && pendingCount > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+              {pendingCount}
+            </span>
+          )}
         </a>
       </SidebarMenuButton>
     </SidebarMenuItem>

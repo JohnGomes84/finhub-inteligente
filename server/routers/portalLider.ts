@@ -715,12 +715,16 @@ export const portalLiderRouter = router({
       });
 
       // Notificar admins sobre nova solicitacao PIX
-      const { notifyPixRequestCreated } = await import("../lib/sse-notifications");
-      notifyPixRequestCreated({
-        requestId: Number(result[0].insertId),
-        employeeName: emp.name,
-        newPixKey: input.newPixKey,
-        createdAt: new Date().toISOString(),
+      const { notifyAdmins } = await import("../_core/sse");
+      notifyAdmins({
+        type: "pix_request_created",
+        data: {
+          requestId: Number(result[0].insertId),
+          employeeName: emp.name,
+          employeeCpf: emp.cpf,
+          newPixKey: input.newPixKey,
+          createdAt: new Date().toISOString(),
+        },
       });
 
       return {
@@ -830,18 +834,34 @@ export const portalLiderRouter = router({
           })
           .where(eq(pixChangeRequests.id, input.requestId));
 
-        // Notificar lider sobre aprovacao
-        const { notifyPixRequestReviewed } = await import("../lib/sse-notifications");
-        notifyPixRequestReviewed({
-          requestId: input.requestId,
-          employeeName: emp?.name || "Funcionario",
-          status: "aprovado",
-          reviewedByUserId: ctx.user.id,
-          reviewNotes: input.reviewNotes,
-          reviewedAt: new Date().toISOString(),
+        // Notificar admins sobre aprovacao
+        const { notifyAdmins } = await import("../_core/sse");
+        notifyAdmins({
+          type: "pix_request_reviewed",
+          data: {
+            requestId: input.requestId,
+            employeeName: emp?.name || "Funcionario",
+            status: "aprovado",
+            reviewedByName: ctx.user.name,
+            reviewNotes: input.reviewNotes,
+            reviewedAt: new Date().toISOString(),
+          },
         });
       } else {
         // Rejeitar
+        const { notifyAdmins } = await import("../_core/sse");
+        notifyAdmins({
+          type: "pix_request_reviewed",
+          data: {
+            requestId: input.requestId,
+            employeeName: emp?.name || "Funcionario",
+            status: "rejeitado",
+            reviewedByName: ctx.user.name,
+            reviewNotes: input.reviewNotes,
+            reviewedAt: new Date().toISOString(),
+          },
+        });
+
         await db
           .update(pixChangeRequests)
           .set({
