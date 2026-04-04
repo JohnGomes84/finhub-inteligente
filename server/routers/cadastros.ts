@@ -219,6 +219,19 @@ export const cadastrosRouter = router({
         .from(employees);
       return result[0]?.count || 0;
     }),
+    searchByCpf: protectedProcedure
+      .input(z.string())
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const cpf = input.replace(/\D/g, '');
+        const result = await db
+          .select()
+          .from(employees)
+          .where(like(employees.cpf, `%${cpf}%`))
+          .limit(1);
+        return result[0] || null;
+      }),
   }),
 
   // ============ CLIENTS ============
