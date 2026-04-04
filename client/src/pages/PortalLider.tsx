@@ -26,11 +26,11 @@ export default function PortalLiderPage() {
     enabled: !!selectedScheduleId,
   });
 
-  const units = useMemo(() => {
-    if (!formData.clientId || !clients) return [];
-    const client = clients.find((c: any) => c.id === parseInt(formData.clientId));
-    return client?.units || [];
-  }, [formData.clientId, clients]);
+  // Carregar units quando clientId mudar
+  const clientIdNum = formData.clientId ? parseInt(formData.clientId) : null;
+  const { data: units = [] } = trpc.cadastros.clientUnits.listByClient.useQuery(clientIdNum || 0, {
+    enabled: !!clientIdNum,
+  });
 
   const todaySchedules = useMemo(() => {
     if (!mySchedules) return [];
@@ -151,7 +151,7 @@ export default function PortalLiderPage() {
                   <Label className="text-slate-300">Local</Label>
                   <Select value={formData.unitId} onValueChange={(val) => setFormData({ ...formData, unitId: val })}>
                     <SelectTrigger className="mt-1 bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Selecione" />
+                      <SelectValue placeholder={units.length === 0 ? "Selecione empresa primeiro" : "Selecione"} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       {units.map((u: any) => (
@@ -262,39 +262,22 @@ export default function PortalLiderPage() {
           </TabsContent>
 
           <TabsContent value="vale" className="space-y-3 mt-4">
-            <Card className="bg-blue-900/30 border-blue-700">
-              <CardContent className="p-4 flex gap-3">
-                <AlertCircle className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-blue-200">Vale e Marmita</p>
-                  <p className="text-sm text-blue-300">Lançar valores por diarista</p>
-                </div>
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="p-4">
+                <p className="text-slate-300 text-sm">Lançar vale, marmita ou bônus</p>
               </CardContent>
             </Card>
-            {schedule?.allocations?.map((alloc: any) => (
-              <Card key={alloc.id} className="bg-slate-800 border-slate-700">
-                <CardContent className="p-4 space-y-3">
-                  <div>
-                    <p className="font-semibold text-white">{alloc.employeeName}</p>
-                    <p className="text-xs text-slate-400">{alloc.employeeCpf}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-slate-300">Vale (R$)</Label>
-                      <Input type="number" placeholder="0.00" className="mt-1 bg-slate-700 border-slate-600 text-white" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-300">Marmita (R$)</Label>
-                      <Input type="number" placeholder="0.00" className="mt-1 bg-slate-700 border-slate-600 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
           </TabsContent>
 
-          <TabsContent value="info" className="text-center py-8 text-slate-400">
-            Informações da operação
+          <TabsContent value="info" className="space-y-3 mt-4">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="p-4 space-y-2">
+                <p className="text-slate-300"><span className="font-semibold">Cliente:</span> {schedule?.clientName}</p>
+                <p className="text-slate-300"><span className="font-semibold">Local:</span> {schedule?.unitName}</p>
+                <p className="text-slate-300"><span className="font-semibold">Turno:</span> {schedule?.shiftName}</p>
+                <p className="text-slate-300"><span className="font-semibold">Data:</span> {schedule?.date}</p>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
