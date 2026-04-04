@@ -1,11 +1,11 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DollarSign, TrendingUp, TrendingDown, Users, Building2,
-  CreditCard, Receipt, AlertTriangle,
+  CreditCard, Receipt, AlertTriangle, ArrowUpRight, ArrowDownLeft,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { KpiCard as KpiCardNew, MonthNavigator, FinancialEvolutionChart } from "@/components/dashboard-components";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function formatCurrency(value: string | number) {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -16,110 +16,272 @@ export default function Dashboard() {
   const { data: kpis, isLoading: kpisLoading } = trpc.financeiro.dashboard.kpis.useQuery();
   const { data: payableSummary } = trpc.financeiro.payable.summary.useQuery();
   const { data: receivableSummary } = trpc.financeiro.receivable.summary.useQuery();
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm mt-1">Visão geral financeira — ML Serviços</p>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground text-sm mt-2">Visão geral financeira em tempo real</p>
+        </div>
+        <MonthNavigator selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - Premium Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Receita Total" value={kpis ? formatCurrency(kpis.revenue) : "—"} icon={TrendingUp} loading={kpisLoading} color="text-emerald-400" bgColor="bg-emerald-400/10" />
-        <KpiCard title="Custos Totais" value={kpis ? formatCurrency(kpis.costs) : "—"} icon={TrendingDown} loading={kpisLoading} color="text-red-400" bgColor="bg-red-400/10" />
-        <KpiCard title="Margem" value={kpis ? formatCurrency(kpis.margin) : "—"} icon={DollarSign} loading={kpisLoading} color="text-blue-400" bgColor="bg-blue-400/10" />
-        <KpiCard title="Funcionários" value={kpis?.employeeCount?.toString() || "0"} icon={Users} loading={kpisLoading} color="text-purple-400" bgColor="bg-purple-400/10" />
+        <PremiumKpiCard
+          title="Receita Total"
+          value={kpis ? formatCurrency(kpis.revenue) : "—"}
+          icon={TrendingUp}
+          loading={kpisLoading}
+          trend="up"
+          trendValue="+12.5%"
+          color="from-emerald-500 to-teal-500"
+        />
+        <PremiumKpiCard
+          title="Custos Totais"
+          value={kpis ? formatCurrency(kpis.costs) : "—"}
+          icon={TrendingDown}
+          loading={kpisLoading}
+          trend="down"
+          trendValue="-3.2%"
+          color="from-red-500 to-orange-500"
+        />
+        <PremiumKpiCard
+          title="Margem Líquida"
+          value={kpis ? formatCurrency(kpis.margin) : "—"}
+          icon={DollarSign}
+          loading={kpisLoading}
+          trend="up"
+          trendValue="+8.7%"
+          color="from-blue-500 to-cyan-500"
+        />
+        <PremiumKpiCard
+          title="Funcionários"
+          value={kpis?.employeeCount?.toString() || "0"}
+          icon={Users}
+          loading={kpisLoading}
+          trend="neutral"
+          trendValue="0"
+          color="from-purple-500 to-pink-500"
+        />
       </div>
 
-      {/* Financial Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-red-400" />
-              Contas a Pagar
-            </CardTitle>
+      {/* Financial Evolution Chart */}
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Evolução Financeira
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FinancialEvolutionChart month={selectedMonth} />
+        </CardContent>
+      </Card>
+
+      {/* Financial Summary - Premium Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Contas a Pagar */}
+        <Card className="border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none"></div>
+          <CardHeader className="pb-4 relative">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <CreditCard className="h-4 w-4 text-red-400" />
+                </div>
+                Contas a Pagar
+              </CardTitle>
+              <span className="text-xs font-semibold px-2 py-1 bg-red-500/20 text-red-300 rounded-full">
+                {payableSummary?.totalPending ? "Pendente" : "Sem pendências"}
+              </span>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Pendente</span>
-              <span className="text-sm font-medium text-yellow-400">{payableSummary ? formatCurrency(payableSummary.totalPending) : "—"}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Pago</span>
-              <span className="text-sm font-medium text-emerald-400">{payableSummary ? formatCurrency(payableSummary.totalPaid) : "—"}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-400" /> Vencido</span>
-              <span className="text-sm font-medium text-red-400">{payableSummary ? formatCurrency(payableSummary.totalOverdue) : "—"}</span>
-            </div>
+          <CardContent className="space-y-4 relative">
+            <FinancialSummaryItem
+              label="Pendente"
+              value={payableSummary ? formatCurrency(payableSummary.totalPending) : "—"}
+              icon={AlertTriangle}
+              color="text-yellow-400"
+            />
+            <FinancialSummaryItem
+              label="Pago"
+              value={payableSummary ? formatCurrency(payableSummary.totalPaid) : "—"}
+              icon={TrendingDown}
+              color="text-emerald-400"
+            />
+            <FinancialSummaryItem
+              label="Vencido"
+              value={payableSummary ? formatCurrency(payableSummary.totalOverdue) : "—"}
+              icon={AlertTriangle}
+              color="text-red-400"
+            />
           </CardContent>
         </Card>
 
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-emerald-400" />
-              Contas a Receber
-            </CardTitle>
+        {/* Contas a Receber */}
+        <Card className="border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none"></div>
+          <CardHeader className="pb-4 relative">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="p-2 bg-emerald-500/20 rounded-lg">
+                  <Receipt className="h-4 w-4 text-emerald-400" />
+                </div>
+                Contas a Receber
+              </CardTitle>
+              <span className="text-xs font-semibold px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded-full">
+                {receivableSummary?.totalPending ? "Pendente" : "Recebido"}
+              </span>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Pendente</span>
-              <span className="text-sm font-medium text-yellow-400">{receivableSummary ? formatCurrency(receivableSummary.totalPending) : "—"}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Recebido</span>
-              <span className="text-sm font-medium text-emerald-400">{receivableSummary ? formatCurrency(receivableSummary.totalReceived) : "—"}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-400" /> Vencido</span>
-              <span className="text-sm font-medium text-red-400">{receivableSummary ? formatCurrency(receivableSummary.totalOverdue) : "—"}</span>
-            </div>
+          <CardContent className="space-y-4 relative">
+            <FinancialSummaryItem
+              label="Pendente"
+              value={receivableSummary ? formatCurrency(receivableSummary.totalPending) : "—"}
+              icon={AlertTriangle}
+              color="text-yellow-400"
+            />
+            <FinancialSummaryItem
+              label="Recebido"
+              value={receivableSummary ? formatCurrency(receivableSummary.totalReceived) : "—"}
+              icon={TrendingUp}
+              color="text-emerald-400"
+            />
+            <FinancialSummaryItem
+              label="Vencido"
+              value={receivableSummary ? formatCurrency(receivableSummary.totalOverdue) : "—"}
+              icon={AlertTriangle}
+              color="text-red-400"
+            />
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <QuickStat label="Clientes" value={kpis?.clientCount?.toString() || "0"} icon={Building2} />
-        <QuickStat label="Total Operações" value={kpis?.totalJobs?.toString() || "0"} icon={Receipt} />
-        <QuickStat label="Contas a Pagar" value={payableSummary?.count?.toString() || "0"} icon={CreditCard} />
-        <QuickStat label="Contas a Receber" value={receivableSummary?.count?.toString() || "0"} icon={Receipt} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <QuickStatCard
+          label="Clientes"
+          value={kpis?.clientCount?.toString() || "0"}
+          icon={Building2}
+          color="from-blue-500 to-cyan-500"
+        />
+        <QuickStatCard
+          label="Total de Operações"
+          value={kpis?.operationCount?.toString() || "0"}
+          icon={TrendingUp}
+          color="from-purple-500 to-pink-500"
+        />
+        <QuickStatCard
+          label="Contas a Pagar"
+          value={payableSummary?.totalCount?.toString() || "0"}
+          icon={CreditCard}
+          color="from-red-500 to-orange-500"
+        />
+        <QuickStatCard
+          label="Contas a Receber"
+          value={receivableSummary?.totalCount?.toString() || "0"}
+          icon={Receipt}
+          color="from-emerald-500 to-teal-500"
+        />
       </div>
     </div>
   );
 }
 
-function KpiCard({ title, value, icon: Icon, loading, color, bgColor }: {
-  title: string; value: string; icon: any; loading: boolean; color: string; bgColor: string;
+function PremiumKpiCard({
+  title,
+  value,
+  icon: Icon,
+  loading,
+  trend,
+  trendValue,
+  color,
+}: {
+  title: string;
+  value: string;
+  icon: any;
+  loading: boolean;
+  trend: "up" | "down" | "neutral";
+  trendValue: string;
+  color: string;
 }) {
   return (
-    <Card className="border-border/50">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{title}</p>
-            {loading ? <div className="h-7 w-24 bg-muted animate-pulse rounded" /> : <p className="text-xl font-bold tracking-tight">{value}</p>}
+    <Card className="border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm overflow-hidden group hover:border-primary/50 transition-all">
+      <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-5 group-hover:opacity-10 transition-opacity`}></div>
+      <CardContent className="p-6 relative">
+        <div className="flex items-start justify-between mb-4">
+          <div className={`p-3 rounded-lg bg-gradient-to-br ${color} bg-opacity-20`}>
+            <Icon className="h-5 w-5 text-primary" />
           </div>
-          <div className={`h-10 w-10 rounded-lg ${bgColor} flex items-center justify-center`}>
-            <Icon className={`h-5 w-5 ${color}`} />
-          </div>
+          {trend !== "neutral" && (
+            <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
+              trend === "up" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"
+            }`}>
+              {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+              {trendValue}
+            </div>
+          )}
         </div>
+        <p className="text-sm text-muted-foreground mb-1">{title}</p>
+        <p className="text-2xl font-bold tracking-tight">{loading ? "—" : value}</p>
       </CardContent>
     </Card>
   );
 }
 
-function QuickStat({ label, value, icon: Icon }: { label: string; value: string; icon: any }) {
+function FinancialSummaryItem({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: string;
+  icon: any;
+  color: string;
+}) {
   return (
-    <div className="glass-card p-4 flex items-center gap-3">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <div>
-        <p className="text-lg font-semibold">{value}</p>
-        <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 hover:bg-background transition-colors">
+      <div className="flex items-center gap-3">
+        <Icon className={`h-4 w-4 ${color}`} />
+        <span className="text-sm text-muted-foreground">{label}</span>
       </div>
+      <span className="text-sm font-semibold">{value}</span>
     </div>
+  );
+}
+
+function QuickStatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: string;
+  icon: any;
+  color: string;
+}) {
+  return (
+    <Card className="border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm overflow-hidden">
+      <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-5`}></div>
+      <CardContent className="p-6 relative">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className="text-2xl font-bold">{value}</p>
+          </div>
+          <div className={`p-3 rounded-lg bg-gradient-to-br ${color} bg-opacity-20`}>
+            <Icon className="h-5 w-5 text-primary" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

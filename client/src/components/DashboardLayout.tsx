@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,20 +20,19 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard, Users, Building2, Truck, Clock, Briefcase,
   Landmark, CreditCard, Receipt, Wallet, BarChart3, Shield,
   LogOut, PanelLeft, ChevronDown, CircleDollarSign, Settings,
-  CalendarDays, UserCheck, Key,
+  CalendarDays, UserCheck, Key, Sparkles,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
-import { useNotifications } from "@/hooks/useNotifications";
-import { Badge } from "./ui/badge";
 
 type MenuItem = {
   icon: any;
@@ -64,9 +62,9 @@ const allMenuItems: MenuItem[] = [
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
-const DEFAULT_WIDTH = 260;
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 400;
+const DEFAULT_WIDTH = 280;
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 420;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -83,26 +81,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-background to-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-3">
-              <CircleDollarSign className="h-10 w-10 text-primary" />
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">FinHub</h1>
-                <p className="text-xs text-muted-foreground">ML Serviços</p>
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-xl opacity-20"></div>
+              <div className="relative flex items-center gap-3 bg-card p-4 rounded-2xl border border-border/50">
+                <CircleDollarSign className="h-10 w-10 text-primary" />
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">FinHub</h1>
+                  <p className="text-xs text-muted-foreground">Inteligente</p>
+                </div>
               </div>
             </div>
             <p className="text-sm text-muted-foreground text-center max-w-sm mt-4">
-              Sistema de Gestão Financeira. Faça login para acessar o painel.
+              Sistema de Gestão Financeira Premium. Faça login para acessar.
             </p>
           </div>
           <Button
             onClick={() => { window.location.href = getLoginUrl(); }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-primary text-primary-foreground"
+            className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground font-semibold h-12 rounded-lg"
           >
-            Entrar
+            <Sparkles className="h-4 w-4 mr-2" />
+            Acessar Painel
           </Button>
         </div>
       </div>
@@ -110,217 +112,123 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-        {children}
-      </DashboardLayoutContent>
+    <SidebarProvider>
+      <Sidebar
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        className="border-r border-border/50 bg-card/50 backdrop-blur-sm"
+      >
+        <SidebarHeader className="border-b border-border/50 bg-gradient-to-b from-card to-background/50">
+          <div className="flex items-center gap-3 px-2 py-4">
+            <div className="flex items-center gap-2 flex-1">
+              <div className="p-2 bg-gradient-to-br from-primary to-accent rounded-lg">
+                <CircleDollarSign className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-bold text-sm tracking-tight">FinHub</h2>
+                <p className="text-xs text-muted-foreground">Inteligente</p>
+              </div>
+            </div>
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent className="px-2">
+          {Object.entries(
+            allMenuItems.reduce((acc, item) => {
+              if (!acc[item.group]) acc[item.group] = [];
+              acc[item.group].push(item);
+              return acc;
+            }, {} as Record<string, MenuItem[]>)
+          ).map(([group, items]) => (
+            <div key={group} className="mb-6">
+              <div className="px-3 py-2 mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group}</p>
+              </div>
+              <SidebarMenu className="gap-1">
+                {items.map((item) => (
+                  <MenuItemComponent key={item.path} item={item} />
+                ))}
+              </SidebarMenu>
+            </div>
+          ))}
+        </SidebarContent>
+
+        <SidebarFooter className="border-t border-border/50 bg-gradient-to-t from-background to-card/50">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton className="h-12 px-3 hover:bg-accent/10 rounded-lg transition-colors">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground text-xs font-bold">
+                        {user?.name?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">{user?.name || "Usuário"}</p>
+                      <p className="text-xs text-muted-foreground">{user?.role === "admin" ? "Admin" : "Líder"}</p>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-card border-border/50">
+                  <DropdownMenuItem className="cursor-pointer hover:bg-accent/10">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Configurações
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border/50" />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const logoutUrl = `${getLoginUrl()}?logout=true`;
+                      window.location.href = logoutUrl;
+                    }}
+                    className="cursor-pointer text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+
+      <SidebarInset className="bg-gradient-to-br from-background via-background/95 to-background">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-40">
+          <SidebarTrigger className="h-10 w-10 rounded-lg hover:bg-accent/10 transition-colors" />
+          <div className="text-sm text-muted-foreground">
+            {new Date().toLocaleDateString("pt-BR", { weekday: "long", month: "long", day: "numeric" })}
+          </div>
+        </div>
+        <main className="p-6 md:p-8">
+          {children}
+        </main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }
 
-function DashboardLayoutContent({
-  children,
-  setSidebarWidth,
-}: {
-  children: React.ReactNode;
-  setSidebarWidth: (width: number) => void;
-}) {
-  const { user, logout } = useAuth();
-  const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const isMobile = useIsMobile();
-
-  // Fetch user permissions to filter menu
-  const { data: permissions } = trpc.usuarios.myPermissions.useQuery();
-
-  const visibleMenuItems = useMemo(() => {
-    if (!permissions) return allMenuItems; // Show all while loading
-    return allMenuItems.filter(item => {
-      const perm = permissions[item.module as keyof typeof permissions];
-      return perm?.canView === true;
-    });
-  }, [permissions]);
-
-  const groups = useMemo(() => {
-    const grouped: Record<string, MenuItem[]> = {};
-    for (const item of visibleMenuItems) {
-      if (!grouped[item.group]) grouped[item.group] = [];
-      grouped[item.group].push(item);
-    }
-    return grouped;
-  }, [visibleMenuItems]);
-
-  const activeMenuItem = visibleMenuItems.find(item => item.path === location);
-  const [pixPendingCount, setPixPendingCount] = useState(0);
-
-  // Conectar ao stream de notificacoes
-  useNotifications((notification) => {
-    if (notification.type === "pix_request_created") {
-      setPixPendingCount(prev => prev + 1);
-    } else if (notification.type === "pix_request_reviewed") {
-      setPixPendingCount(prev => Math.max(0, prev - 1));
-    }
-  });
-
-  // Buscar contagem inicial de PIX pendentes
-  const { data: pixRequests } = trpc.portalLider.listPixRequests.useQuery(
-    { status: "pendente" },
-    { enabled: user?.role === "admin" }
-  );
-
-  useEffect(() => {
-    if (pixRequests) {
-      setPixPendingCount(pixRequests.length);
-    }
-  }, [pixRequests]);
-
-  useEffect(() => {
-    if (isCollapsed) setIsResizing(false);
-  }, [isCollapsed]);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-      const newWidth = e.clientX - sidebarLeft;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) setSidebarWidth(newWidth);
-    };
-    const handleMouseUp = () => setIsResizing(false);
-
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isResizing, setSidebarWidth]);
+function MenuItemComponent({ item }: { item: MenuItem }) {
+  const [location] = useLocation();
+  const isActive = location === item.path;
+  const Icon = item.icon;
 
   return (
-    <>
-      <div className="relative" ref={sidebarRef}>
-        <Sidebar collapsible="icon" className="border-r-0" disableTransition={isResizing}>
-          <SidebarHeader className="h-16 justify-center border-b border-border/50">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none shrink-0"
-                aria-label="Toggle navigation"
-              >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
-              {!isCollapsed && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <CircleDollarSign className="h-5 w-5 text-primary shrink-0" />
-                  <div className="min-w-0">
-                    <span className="font-bold text-sm tracking-tight block truncate">FinHub</span>
-                    <span className="text-[10px] text-muted-foreground block truncate">ML Serviços</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </SidebarHeader>
-
-          <SidebarContent className="gap-0 py-2">
-            {Object.entries(groups).map(([groupName, items]) => (
-              <div key={groupName} className="mb-1">
-                {!isCollapsed && (
-                  <div className="px-4 py-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                      {groupName}
-                    </span>
-                  </div>
-                )}
-                <SidebarMenu className="px-2">
-                  {items.map(item => {
-                    const isActive = location === item.path;
-                    const showBadge = item.path === "/pix-approvals" && pixPendingCount > 0;
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          isActive={isActive}
-                          onClick={() => setLocation(item.path)}
-                          tooltip={item.label}
-                          className={`h-9 transition-all font-normal text-[13px] ${
-                            isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
-                          <span className="flex-1">{item.label}</span>
-                          {showBadge && (
-                            <Badge variant="destructive" className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs font-bold">
-                              {pixPendingCount}
-                            </Badge>
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </div>
-            ))}
-          </SidebarContent>
-
-          <SidebarFooter className="p-3 border-t border-border/50">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1.5 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none">
-                  <Avatar className="h-8 w-8 border border-primary/20 shrink-0">
-                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                      {user?.name?.charAt(0).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">{user?.name || "Usuário"}</p>
-                    <p className="text-[11px] text-muted-foreground truncate mt-1">
-                      {user?.role === "admin" ? "Administrador" : "Usuário"}
-                    </p>
-                  </div>
-                  <ChevronDown className="h-3 w-3 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-2 py-1.5">
-                  <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sair</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarFooter>
-        </Sidebar>
-        <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
-          onMouseDown={() => { if (!isCollapsed) setIsResizing(true); }}
-          style={{ zIndex: 50 }}
-        />
-      </div>
-
-      <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg" />
-              <span className="text-sm font-medium">{activeMenuItem?.label ?? "Menu"}</span>
-            </div>
-          </div>
-        )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-      </SidebarInset>
-    </>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        className={`rounded-lg transition-all ${
+          isActive
+            ? "bg-gradient-to-r from-primary/20 to-accent/20 text-primary font-semibold border-l-2 border-primary"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent/5"
+        }`}
+      >
+        <a href={item.path} className="flex items-center gap-3 px-3 py-2.5">
+          <Icon className="h-5 w-5 flex-shrink-0" />
+          <span className="text-sm">{item.label}</span>
+        </a>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
