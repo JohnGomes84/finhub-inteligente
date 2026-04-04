@@ -20,7 +20,7 @@ export default function PortalLiderPage() {
   const [searchingEmployee, setSearchingEmployee] = useState(false);
 
   // Dados
-  const { data: clients } = trpc.clients.list.useQuery();
+  const { data: clients } = trpc.cadastros.clients.list.useQuery();
   const { data: mySchedules } = trpc.portalLider.mySchedules.useQuery();
   const { data: schedule } = trpc.portalLider.getScheduleDetail.useQuery(selectedScheduleId || 0, {
     enabled: !!selectedScheduleId,
