@@ -27,9 +27,10 @@ export default function PortalLiderPage() {
   });
 
   // Carregar units quando clientId mudar
-  const clientIdNum = formData.clientId ? parseInt(formData.clientId) : null;
-  const { data: units = [] } = trpc.cadastros.clientUnits.listByClient.useQuery(clientIdNum || 0, {
-    enabled: !!clientIdNum,
+  const clientIdNum = Number(formData.clientId);
+  const hasValidClient = Number.isFinite(clientIdNum) && clientIdNum > 0;
+  const { data: units = [], isLoading: unitsLoading } = trpc.cadastros.clientUnits.listByClient.useQuery(clientIdNum, {
+    enabled: hasValidClient,
   });
 
   const todaySchedules = useMemo(() => {
@@ -139,7 +140,7 @@ export default function PortalLiderPage() {
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       {clients?.map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)} className="text-white">
+                        <SelectItem key={c.id} value={c.id.toString()} className="text-white">
                           {c.name}
                         </SelectItem>
                       ))}
@@ -151,7 +152,7 @@ export default function PortalLiderPage() {
                   <Label className="text-slate-300">Local</Label>
                   <Select value={formData.unitId} onValueChange={(val) => setFormData({ ...formData, unitId: val })}>
                     <SelectTrigger className="mt-1 bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder={units.length === 0 ? "Selecione empresa primeiro" : "Selecione"} />
+                      <SelectValue placeholder={!hasValidClient ? "Selecione empresa primeiro" : unitsLoading ? "Carregando..." : units.length === 0 ? "Nenhum local cadastrado" : "Selecione"} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       {units.map((u: any) => (
