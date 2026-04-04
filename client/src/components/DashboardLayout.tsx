@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import {
@@ -53,7 +53,7 @@ const allMenuItems: MenuItem[] = [
   { icon: Settings, label: "Centros de Custo", path: "/cost-centers", module: "cost_centers", group: "Cadastros" },
   { icon: Landmark, label: "Contas Bancárias", path: "/bank-accounts", module: "bank_accounts", group: "Cadastros" },
   { icon: CalendarDays, label: "Planejamentos", path: "/schedules", module: "schedules", group: "Operações" },
-  { icon: UserCheck, label: "Portal do Líder", path: "/leader-portal", module: "schedules", group: "Operações" },
+  { icon: UserCheck, label: "Portal do Líder", path: "/portal-lider", module: "schedules", group: "Operações" },
   { icon: Key, label: "Aprovação PIX", path: "/pix-approvals", module: "users", group: "Admin" },
   { icon: CreditCard, label: "Contas a Pagar", path: "/accounts-payable", module: "accounts_payable", group: "Financeiro" },
   { icon: Receipt, label: "Contas a Receber", path: "/accounts-receivable", module: "accounts_receivable", group: "Financeiro" },
