@@ -27,27 +27,27 @@ export const dashboardRouter = router({
       // Faturamento do mês (contas a receber)
       const currentRevenueResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsReceivable.status, 'pending')
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, 'pendente')
           )
         );
 
       const prevRevenueResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, prevStartDate),
-            lt(accountsReceivable.issueDate, new Date(prevEndDate.getTime() + 86400000)),
-            eq(accountsReceivable.status, 'pending')
+            gte(accountsReceivable.dueDate, prevStartDate),
+            lt(accountsReceivable.dueDate, new Date(prevEndDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, 'pendente')
           )
         );
 
@@ -65,7 +65,7 @@ export const dashboardRouter = router({
           and(
             gte(accountsPayable.dueDate, startDate),
             lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsPayable.status, 'pending')
+            eq(accountsPayable.status, 'pendente')
           )
         );
 
@@ -78,7 +78,7 @@ export const dashboardRouter = router({
           and(
             gte(accountsPayable.dueDate, prevStartDate),
             lt(accountsPayable.dueDate, new Date(prevEndDate.getTime() + 86400000)),
-            eq(accountsPayable.status, 'pending')
+            eq(accountsPayable.status, 'pendente')
           )
         );
 
@@ -167,13 +167,13 @@ export const dashboardRouter = router({
       // Prejuízo
       const revenueResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000))
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000))
           )
         );
 
@@ -269,17 +269,17 @@ export const dashboardRouter = router({
       // Receita por dia
       const dailyRevenueResult = await db
         .select({
-          date: sql<string>`DATE(${accountsReceivable.issueDate})`,
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          date: sql<string>`DATE(${accountsReceivable.dueDate})`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000))
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000))
           )
         )
-        .groupBy(sql`DATE(${accountsReceivable.issueDate})`);
+        .groupBy(sql`DATE(${accountsReceivable.dueDate})`);
 
       // Custos por dia
       const dailyCostsResult = await db
@@ -302,8 +302,8 @@ export const dashboardRouter = router({
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${input.year}-${String(input.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const revenue = dailyRevenueResult.find((r) => r.date === dateStr)?.total || 0;
-        const costs = dailyCostsResult.find((c) => c.date === dateStr)?.total || 0;
+        const revenue = dailyRevenueResult.find((r) => r.date?.includes(dateStr))?.total || 0;
+        const costs = dailyCostsResult.find((c) => c.date?.includes(dateStr))?.total || 0;
 
         data.push({
           date: dateStr,
@@ -338,23 +338,23 @@ export const dashboardRouter = router({
         .select({
           clientId: accountsReceivable.clientId,
           clientName: sql<string>`COALESCE(c.name, 'Desconhecido')`,
-          totalRevenue: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          totalRevenue: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
           workCount: sql<number>`COUNT(DISTINCT ${workSchedules.id})`,
         })
         .from(accountsReceivable)
         .leftJoin(
           workSchedules,
-          sql`DATE(${accountsReceivable.issueDate}) = DATE(${workSchedules.date})`
+          sql`DATE(${accountsReceivable.dueDate}) = DATE(${workSchedules.date})`
         )
         .leftJoin(sql`clients c`, sql`${accountsReceivable.clientId} = c.id`)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000))
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000))
           )
         )
         .groupBy(accountsReceivable.clientId)
-        .orderBy(sql`SUM(${accountsReceivable.value}) DESC`)
+        .orderBy(sql`SUM(${accountsReceivable.amount}) DESC`)
         .limit(3);
 
       return topClientsResult;
@@ -387,7 +387,7 @@ export const dashboardRouter = router({
           and(
             gte(accountsPayable.dueDate, startDate),
             lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsPayable.status, "pending")
+            eq(accountsPayable.status, "pendente")
           )
         );
 
@@ -401,35 +401,35 @@ export const dashboardRouter = router({
           and(
             gte(accountsPayable.dueDate, startDate),
             lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsPayable.status, "paid")
+            eq(accountsPayable.status, "pago")
           )
         );
 
       // A receber pendente
       const receivablePendingResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsReceivable.status, "pending")
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, "pendente")
           )
         );
 
       // A receber recebido
       const receivablePaidResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.amount}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
-            gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsReceivable.status, "received")
+            gte(accountsReceivable.dueDate, startDate),
+            lt(accountsReceivable.dueDate, new Date(endDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, "recebido")
           )
         );
 
