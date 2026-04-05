@@ -21,7 +21,8 @@ import UsersPage from "./pages/Users";
 import AnalyticsPage from "./pages/Analytics";
 import SchedulesPage from "./pages/Schedules";
 import PortalLiderPage from "./pages/PortalLider";
-import PixApprovalsPage from "./pages/PixApprovals";
+import PixApprovalsPage from "@/pages/PixApprovals";
+import PaymentsPage from "@/pages/Payments";
 
 function Router() {
   return (
