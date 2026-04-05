@@ -19,7 +19,8 @@ export const dashboardRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -30,32 +31,34 @@ export const dashboardRouter = router({
       // Faturamento do mês (contas a receber)
       const currentRevenue = await db
         .select({
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
             gte(accountsReceivable.issueDate, startDate),
-            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000))
+            lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, 'pending')
           )
         );
 
       const prevRevenue = await db
         .select({
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
             gte(accountsReceivable.issueDate, prevStartDate),
-            lt(accountsReceivable.issueDate, new Date(prevEndDate.getTime() + 86400000))
+            lt(accountsReceivable.issueDate, new Date(prevEndDate.getTime() + 86400000)),
+            eq(accountsReceivable.status, 'pending')
           )
         );
 
       // Custos operacionais (contas a pagar)
       const currentCosts = await db
         .select({
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -67,7 +70,7 @@ export const dashboardRouter = router({
 
       const prevCosts = await db
         .select({
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -155,7 +158,8 @@ export const dashboardRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -163,7 +167,7 @@ export const dashboardRouter = router({
       // Verificar prejuízo
       const revenue = await db
         .select({
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
         })
         .from(accountsReceivable)
         .where(
@@ -175,7 +179,7 @@ export const dashboardRouter = router({
 
       const costs = await db
         .select({
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -193,7 +197,7 @@ export const dashboardRouter = router({
       const overdueAccounts = await db
         .select({
           count: sql<number>`COUNT(*)`,
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -260,7 +264,8 @@ export const dashboardRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -269,7 +274,7 @@ export const dashboardRouter = router({
       const dailyRevenue = await db
         .select({
           date: sql<string>`DATE(${accountsReceivable.issueDate})`,
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
@@ -284,7 +289,7 @@ export const dashboardRouter = router({
       const dailyCosts = await db
         .select({
           date: sql<string>`DATE(${accountsPayable.dueDate})`,
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -326,7 +331,8 @@ export const dashboardRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -369,7 +375,8 @@ export const dashboardRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
@@ -377,7 +384,7 @@ export const dashboardRouter = router({
       // A pagar pendente
       const payablePending = await db
         .select({
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -391,7 +398,7 @@ export const dashboardRouter = router({
       // A pagar pago
       const payablePaid = await db
         .select({
-          total: sql<number>`COALESCE(SUM(amount), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -405,7 +412,7 @@ export const dashboardRouter = router({
       // A receber pendente
       const receivablePending = await db
         .select({
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
         })
         .from(accountsReceivable)
         .where(
@@ -419,7 +426,7 @@ export const dashboardRouter = router({
       // A receber recebido
       const receivablePaid = await db
         .select({
-          total: sql<number>`COALESCE(SUM(value), 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
         })
         .from(accountsReceivable)
         .where(
