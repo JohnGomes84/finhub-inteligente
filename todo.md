@@ -199,3 +199,44 @@
 - [ ] Aba "Vale": Lançar vale/marmita por diarista (bônus apenas no Planejamento/ADM)
 - [ ] Aba "Mais": Alteração PIX, Cadastro rápido, Histórico
 - [ ] Testes de fluxo completo
+
+## Fase 14: FLUXO CENTRAL DO NEGÓCIO (Validação → Pagamentos → Contas a Receber)
+- [ ] FASE 14.1: Validação de Planejamentos e Transação Atômica
+  - [ ] Criar procedure `validateSchedule` com validações
+  - [ ] Implementar transação atômica (rollback se falhar)
+  - [ ] Criar endpoint tRPC `schedules.validate`
+  - [ ] Criar testes para validação e transação
+
+- [ ] FASE 14.2: Geração de Registros de Pagamento por Diarista
+  - [ ] Criar procedure para gerar payment records
+  - [ ] Calcular: base - marmita - vale + bônus
+  - [ ] Buscar PIX do employee, marcar "Sem PIX" se faltar
+  - [ ] Integrar com shift exceptions para valores corretos
+  - [ ] Criar testes para cálculo de pagamento
+
+- [ ] FASE 14.3: Geração de Contas a Receber Automática
+  - [ ] Criar procedure para gerar accounts_receivable
+  - [ ] Descrição: "OS - [Cliente] - [Data]"
+  - [ ] Vencimento: data + 30 dias
+  - [ ] Integrar com transação atômica
+
+- [ ] FASE 14.4: Tela de Pagamentos (UI)
+  - [ ] Aba "Pagamento de Funcionários" com filtros
+  - [ ] KPIs: Total a Pagar, Funcionários, Dias Trabalhados, Sem PIX
+  - [ ] Modo Analítico (linha por diária)
+  - [ ] Modo Sintético (linha por funcionário)
+  - [ ] Aba "Recebimento de Clientes" com filtros
+  - [ ] Toggle de colunas visíveis
+
+- [ ] FASE 14.5: Exportação e Lotes de Pagamento
+  - [ ] Botão "Exportar para Pagamento" (Excel)
+  - [ ] Botão "Gerar Lote de Pagamento"
+  - [ ] Botão "Marcar Lote como Pago"
+  - [ ] Botão "Exportar Recebimento" (Excel)
+  - [ ] Botão "Gerar Ordem de Serviço" (PDF)
+
+- [ ] FASE 14.6: Validação Final
+  - [ ] Testar validação de planejamento
+  - [ ] Confirmar geração automática de payment records
+  - [ ] Confirmar geração automática de accounts_receivable
+  - [ ] Build validado

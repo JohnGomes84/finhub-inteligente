@@ -70,6 +70,11 @@ function Router() {
         <DashboardLayout><SchedulesPage /></DashboardLayout>
       </Route>
       <Route path="/portal-lider">
+      <Route path="/payments">
+        <DashboardLayout>
+          <PaymentsPage />
+        </DashboardLayout>
+      </Route>
         <PortalLiderPage />
       </Route>
       <Route path="/pix-approvals">
