@@ -9,6 +9,8 @@ import { planejamentosRouter } from "./routers/planejamentos";
 import { portalLiderRouter } from "./routers/portalLider";
 import { qrcodeRouter } from "./routers/qrcode";
 import { relatoriosRouter } from "./routers/relatorios";
+import { dashboardRouter } from "./routers/dashboard";
+import { reportGenerationRouter } from "./routers/report-generation";
 
 export const appRouter = router({
   system: systemRouter,
@@ -41,6 +43,8 @@ export const appRouter = router({
 
   // Relatórios
   relatorios: relatoriosRouter,
+  dashboard: dashboardRouter,
+  reportGeneration: reportGenerationRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -161,7 +161,7 @@ describe("Schedule Validation", () => {
       const description = `OS - Cliente ${clientId} - ${date.toLocaleDateString("pt-BR")}`;
       expect(description).toContain("OS -");
       expect(description).toContain("Cliente 5");
-      expect(description).toMatch(/d{2}/d{2}/d{4}/);
+      expect(description).toMatch(/\d{2}\/\d{2}\/\d{4}/);
     });
   });
 });
