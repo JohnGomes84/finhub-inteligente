@@ -1,15 +1,12 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { accountsPayable, accountsReceivable, workSchedules, employees } from "../../drizzle/schema";
-import { eq, gte, lt, and, sql } from "drizzle-orm";
-import { COOKIE_NAME } from "../_core/cookies";
+import { sql, and, gte, lt, eq } from "drizzle-orm";
+import { accountsReceivable, accountsPayable, workSchedules, clients } from "../../drizzle/schema";
 
 export const dashboardRouter = router({
   /**
-   * Busca KPIs do mês selecionado
-   * Retorna: faturamento, custos, margem, total de trabalhos
-   * com variação em relação ao mês anterior
+   * Busca KPIs principais do mês (faturamento, custos, margem, trabalhos)
    */
   getMonthlyKPIs: protectedProcedure
     .input(
@@ -24,12 +21,11 @@ export const dashboardRouter = router({
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
-
       const prevStartDate = new Date(input.year, input.month - 2, 1);
       const prevEndDate = new Date(input.year, input.month - 1, 0);
 
       // Faturamento do mês (contas a receber)
-      const currentRevenue = await db
+      const currentRevenueResult = await db
         .select({
           total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
@@ -42,7 +38,7 @@ export const dashboardRouter = router({
           )
         );
 
-      const prevRevenue = await db
+      const prevRevenueResult = await db
         .select({
           total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
@@ -55,100 +51,101 @@ export const dashboardRouter = router({
           )
         );
 
+      const currentRevenue = currentRevenueResult[0]?.total || 0;
+      const prevRevenue = prevRevenueResult[0]?.total || 0;
+      const revenueVariation = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
+
       // Custos operacionais (contas a pagar)
-      const currentCosts = await db
+      const currentCostsResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
           and(
             gte(accountsPayable.dueDate, startDate),
-            lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000))
+            lt(accountsPayable.dueDate, new Date(endDate.getTime() + 86400000)),
+            eq(accountsPayable.status, 'pending')
           )
         );
 
-      const prevCosts = await db
+      const prevCostsResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
           and(
             gte(accountsPayable.dueDate, prevStartDate),
-            lt(accountsPayable.dueDate, new Date(prevEndDate.getTime() + 86400000))
+            lt(accountsPayable.dueDate, new Date(prevEndDate.getTime() + 86400000)),
+            eq(accountsPayable.status, 'pending')
           )
         );
 
-      // Total de trabalhos validados
-      const currentWorks = await db
+      const currentCosts = currentCostsResult[0]?.total || 0;
+      const prevCosts = prevCostsResult[0]?.total || 0;
+      const costsVariation = prevCosts > 0 ? ((currentCosts - prevCosts) / prevCosts) * 100 : 0;
+
+      // Margem de lucro
+      const currentMargin = currentRevenue - currentCosts;
+      const prevMargin = prevRevenue - prevCosts;
+      const marginVariation = prevMargin !== 0 ? ((currentMargin - prevMargin) / Math.abs(prevMargin)) * 100 : 0;
+
+      // Total de trabalhos (planejamentos validados)
+      const currentWorksResult = await db
         .select({
-          total: sql<number>`COUNT(*)`,
+          count: sql<number>`COUNT(DISTINCT ${workSchedules.id})`,
         })
         .from(workSchedules)
         .where(
           and(
             gte(workSchedules.date, startDate),
-            lt(workSchedules.date, new Date(endDate.getTime() + 86400000)),
-            eq(workSchedules.status, "validated")
+            lt(workSchedules.date, new Date(endDate.getTime() + 86400000))
           )
         );
 
-      const prevWorks = await db
+      const prevWorksResult = await db
         .select({
-          total: sql<number>`COUNT(*)`,
+          count: sql<number>`COUNT(DISTINCT ${workSchedules.id})`,
         })
         .from(workSchedules)
         .where(
           and(
             gte(workSchedules.date, prevStartDate),
-            lt(workSchedules.date, new Date(prevEndDate.getTime() + 86400000)),
-            eq(workSchedules.status, "validated")
+            lt(workSchedules.date, new Date(prevEndDate.getTime() + 86400000))
           )
         );
 
-      const currentRev = currentRevenue[0]?.total || 0;
-      const prevRev = prevRevenue[0]?.total || 0;
-      const currentCost = currentCosts[0]?.total || 0;
-      const prevCost = prevCosts[0]?.total || 0;
-      const currentWork = currentWorks[0]?.total || 0;
-      const prevWork = prevWorks[0]?.total || 0;
-
-      const revenueVariation = prevRev > 0 ? ((currentRev - prevRev) / prevRev) * 100 : 0;
-      const costVariation = prevCost > 0 ? ((currentCost - prevCost) / prevCost) * 100 : 0;
-      const margin = currentRev - currentCost;
-      const prevMargin = prevRev - prevCost;
-      const marginVariation = prevMargin !== 0 ? ((margin - prevMargin) / Math.abs(prevMargin)) * 100 : 0;
-      const workVariation = prevWork > 0 ? ((currentWork - prevWork) / prevWork) * 100 : 0;
+      const currentWorks = currentWorksResult[0]?.count || 0;
+      const prevWorks = prevWorksResult[0]?.count || 0;
+      const worksVariation = prevWorks > 0 ? ((currentWorks - prevWorks) / prevWorks) * 100 : 0;
 
       return {
         revenue: {
-          current: currentRev,
-          previous: prevRev,
+          current: currentRevenue,
+          previous: prevRevenue,
           variation: revenueVariation,
         },
         costs: {
-          current: currentCost,
-          previous: prevCost,
-          variation: costVariation,
+          current: currentCosts,
+          previous: prevCosts,
+          variation: costsVariation,
         },
         margin: {
-          current: margin,
+          current: currentMargin,
           previous: prevMargin,
           variation: marginVariation,
-          isNegative: margin < 0,
         },
         works: {
-          current: currentWork,
-          previous: prevWork,
-          variation: workVariation,
+          current: currentWorks,
+          previous: prevWorks,
+          variation: worksVariation,
         },
       };
     }),
 
   /**
-   * Busca alertas do negócio
-   * Retorna: prejuízo, contas vencidas, diaristas sem PIX, planejamentos pendentes
+   * Busca alertas automáticos
    */
   getAlerts: protectedProcedure
     .input(
@@ -163,11 +160,14 @@ export const dashboardRouter = router({
 
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0);
+      const today = new Date();
 
-      // Verificar prejuízo
-      const revenue = await db
+      const alerts = [];
+
+      // Prejuízo
+      const revenueResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
@@ -177,9 +177,9 @@ export const dashboardRouter = router({
           )
         );
 
-      const costs = await db
+      const costsResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -189,72 +189,68 @@ export const dashboardRouter = router({
           )
         );
 
-      const currentRevenue = revenue[0]?.total || 0;
-      const currentCosts = costs[0]?.total || 0;
-      const hasLoss = currentCosts > currentRevenue;
+      const revenue = revenueResult[0]?.total || 0;
+      const costs = costsResult[0]?.total || 0;
+
+      if (costs > revenue) {
+        alerts.push({
+          type: 'loss',
+          message: `Atenção: operação com prejuízo de R$ ${(costs - revenue).toFixed(2)} em ${new Date(input.year, input.month - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
+        });
+      }
 
       // Contas vencidas
-      const overdueAccounts = await db
+      const overdueResult = await db
         .select({
           count: sql<number>`COUNT(*)`,
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
           and(
-            lt(accountsPayable.dueDate, new Date()),
-            eq(accountsPayable.status, "pending")
+            lt(accountsPayable.dueDate, today),
+            eq(accountsPayable.status, 'pending')
           )
         );
 
-      // Diaristas sem PIX
-      const employeesWithoutPix = await db
-        .select({
-          count: sql<number>`COUNT(*)`,
-        })
-        .from(employees)
-        .where(
-          and(
-            eq(employees.status, "active"),
-            sql`${employees.pixKey} IS NULL OR ${employees.pixKey} = ''`
-          )
-        );
+      if (overdueResult[0]?.count > 0) {
+        alerts.push({
+          type: 'overdue',
+          message: `${overdueResult[0].count} conta(s) vencida(s) totalizando R$ ${(overdueResult[0].total || 0).toFixed(2)}`,
+        });
+      }
 
-      // Planejamentos pendentes há mais de 2 dias
-      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-      const pendingSchedules = await db
+      // Planejamentos pendentes
+      const pendingSchedulesResult = await db
         .select({
           count: sql<number>`COUNT(*)`,
         })
         .from(workSchedules)
         .where(
           and(
-            eq(workSchedules.status, "pending"),
-            lt(workSchedules.createdAt, twoDaysAgo)
+            lt(workSchedules.date, new Date(today.getTime() - 2 * 86400000))
           )
         );
 
-      return {
-        loss: {
-          exists: hasLoss,
-          amount: hasLoss ? currentCosts - currentRevenue : 0,
-          month: `${input.month}/${input.year}`,
-        },
-        overdueAccounts: {
-          count: overdueAccounts[0]?.count || 0,
-          total: overdueAccounts[0]?.total || 0,
-        },
-        employeesWithoutPix: {
-          count: employeesWithoutPix[0]?.count || 0,
-        },
-        pendingSchedules: {
-          count: pendingSchedules[0]?.count || 0,
-        },
-      };
+      if (pendingSchedulesResult[0]?.count > 0) {
+        alerts.push({
+          type: 'pending_schedules',
+          message: `${pendingSchedulesResult[0].count} planejamento(s) aguardando validação`,
+        });
+      }
+
+      if (alerts.length === 0) {
+        alerts.push({
+          type: 'healthy',
+          message: '✅ Operação saudável — nenhum alerta no momento',
+        });
+      }
+
+      return alerts;
     }),
 
   /**
-   * Busca dados para gráfico de evolução financeira diária
+   * Busca evolução financeira diária
    */
   getDailyFinancialEvolution: protectedProcedure
     .input(
@@ -271,7 +267,7 @@ export const dashboardRouter = router({
       const endDate = new Date(input.year, input.month, 0);
 
       // Receita por dia
-      const dailyRevenue = await db
+      const dailyRevenueResult = await db
         .select({
           date: sql<string>`DATE(${accountsReceivable.issueDate})`,
           total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
@@ -286,7 +282,7 @@ export const dashboardRouter = router({
         .groupBy(sql`DATE(${accountsReceivable.issueDate})`);
 
       // Custos por dia
-      const dailyCosts = await db
+      const dailyCostsResult = await db
         .select({
           date: sql<string>`DATE(${accountsPayable.dueDate})`,
           total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
@@ -306,8 +302,8 @@ export const dashboardRouter = router({
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${input.year}-${String(input.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const revenue = dailyRevenue.find((r) => r.date === dateStr)?.total || 0;
-        const costs = dailyCosts.find((c) => c.date === dateStr)?.total || 0;
+        const revenue = dailyRevenueResult.find((r) => r.date === dateStr)?.total || 0;
+        const costs = dailyCostsResult.find((c) => c.date === dateStr)?.total || 0;
 
         data.push({
           date: dateStr,
@@ -338,7 +334,7 @@ export const dashboardRouter = router({
       const endDate = new Date(input.year, input.month, 0);
 
       // Buscar receita por cliente
-      const topClients = await db
+      const topClientsResult = await db
         .select({
           clientId: accountsReceivable.clientId,
           clientName: sql<string>`COALESCE(c.name, 'Desconhecido')`,
@@ -361,7 +357,7 @@ export const dashboardRouter = router({
         .orderBy(sql`SUM(${accountsReceivable.value}) DESC`)
         .limit(3);
 
-      return topClients;
+      return topClientsResult;
     }),
 
   /**
@@ -382,9 +378,9 @@ export const dashboardRouter = router({
       const endDate = new Date(input.year, input.month, 0);
 
       // A pagar pendente
-      const payablePending = await db
+      const payablePendingResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -396,9 +392,9 @@ export const dashboardRouter = router({
         );
 
       // A pagar pago
-      const payablePaid = await db
+      const payablePaidResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsPayable.amount}), 0)`,
         })
         .from(accountsPayable)
         .where(
@@ -410,9 +406,9 @@ export const dashboardRouter = router({
         );
 
       // A receber pendente
-      const receivablePending = await db
+      const receivablePendingResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
@@ -424,30 +420,30 @@ export const dashboardRouter = router({
         );
 
       // A receber recebido
-      const receivablePaid = await db
+      const receivablePaidResult = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}, 0)`,
+          total: sql<number>`COALESCE(SUM(${accountsReceivable.value}), 0)`,
         })
         .from(accountsReceivable)
         .where(
           and(
             gte(accountsReceivable.issueDate, startDate),
             lt(accountsReceivable.issueDate, new Date(endDate.getTime() + 86400000)),
-            eq(accountsReceivable.status, "paid")
+            eq(accountsReceivable.status, "received")
           )
         );
 
-      const payablePend = payablePending[0]?.total || 0;
-      const payablePd = payablePaid[0]?.total || 0;
-      const receivablePend = receivablePending[0]?.total || 0;
-      const receivablePd = receivablePaid[0]?.total || 0;
+      const payablePending = payablePendingResult[0]?.total || 0;
+      const payablePaid = payablePaidResult[0]?.total || 0;
+      const receivablePending = receivablePendingResult[0]?.total || 0;
+      const receivablePaid = receivablePaidResult[0]?.total || 0;
 
       return {
-        payablePending: payablePend,
-        payablePaid: payablePd,
-        receivablePending: receivablePend,
-        receivablePaid: receivablePd,
-        forecastedBalance: receivablePend - payablePend,
+        payablePending,
+        payablePaid,
+        receivablePending,
+        receivablePaid,
+        forecastedBalance: receivablePending - payablePending,
       };
     }),
 });
