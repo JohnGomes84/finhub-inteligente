@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { registerSSESubscriber } from "../lib/sse-notifications";
 import { setupSSE } from "./sse";
+import { runSeeds } from "../lib/seed";
 import { serveStatic, setupVite } from "./vite";
 import {
   createRateLimitMiddleware,
@@ -39,6 +40,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Executar seeds de configuração
+  await runSeeds();
+  
   const app = express();
   const server = createServer(app);
   const rateLimit = createRateLimitMiddleware();
